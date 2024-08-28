@@ -7,11 +7,11 @@ pot,abbrev,country,team,coefficient,code,status
 1,FRA,GER,Eintracht Frankfurt,60,50072,1
 1,LAZ,ITA,Lazio,54,52973,1
 1,TOT,ENG,Tottenham,54,1652,1
-1,RSO,ESP,Real Sociedad,51,50123,1
+1,SLP,CZE,Slavia Praha,53,52498,0
+2,RSO,ESP,Real Sociedad,51,50123,1
 2,AZ,NED,AZ Alkmaar,50,52327,1
 2,BRA,POR,Braga,49,52336,0
 2,OLY,GRE,Olympiacos,48,2610,1
-2,LIL,FRA,Lille,47,75797,0
 2,LYO,FRA,Lyon,44,5312,1
 2,PAO,GRE,PAOK,37,50130,0
 2,LAS,AUT,LASK,37,63405,0
