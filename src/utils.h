@@ -2,9 +2,8 @@
 #define UTILS_H
 
 #include "globals.h"
-#include <vector>
 #include <string>
-using namespace std;
+#include <vector>
 
 std::vector<Team> readCSVTeams(std::string input_file);
 

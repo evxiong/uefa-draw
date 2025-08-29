@@ -1,0 +1,65 @@
+#include "Draw.h"
+#include "Simulator.h"
+#include <iostream>
+#include <string>
+
+// usage:
+// $ make all
+// $ ./bin/main <year> <ucl | uel | uecl> <iterations> <input csv path>
+//   <output csv path>
+
+int main(int argc, char **argv) {
+    int iterations = 1;
+    std::string input = "";
+    std::string output = "";
+    std::string competition = "";
+
+    if (argc > 5) {
+        std::cerr << "Too many arguments" << std::endl;
+        exit(1);
+    } else if (argc < 3) {
+        std::cerr << "Missing arguments" << std::endl;
+        exit(1);
+    }
+
+    int year = std::stoi(argv[1]);
+    std::string competition = argv[2];
+
+    if (argc >= 4) {
+        iterations = std::stoi(argv[3]);
+    }
+    if (argc >= 5) {
+        input = argv[4];
+    }
+    if (argc >= 6) {
+        output = argv[5];
+    }
+
+    if (year <= 0) {
+        std::cerr << "Invalid year: must be > 0" << std::endl;
+        exit(1);
+    }
+
+    if (competition != "ucl" && competition != "uel" && competition != "uecl") {
+        std::cerr << "Invalid competition type: must be 'ucl', 'uel', or 'uecl'"
+                  << std::endl;
+        exit(1);
+    }
+
+    Simulator s(year, competition, input, output);
+    s.run(iterations);
+    return 0;
+}
+
+// int main()
+// {
+//     // UCL ucl;
+//     // ucl.draw(false);
+//     // ucl.displayPots();
+//     // ucl.verifyDraw(false);
+//     Draw *ucl = new UECLDraw();
+//     // UCLDraw ucl;
+//     ucl->draw(false);
+//     ucl->displayPots();
+//     ucl->verifyDraw(false);
+// }
