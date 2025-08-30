@@ -31,15 +31,14 @@ int main(int argc, char **argv) {
 
     const std::string input_file =
         "data/" + std::to_string(year) + "/teams/" + competition + ".csv";
-    std::vector<Team> teams = readCSVTeams(input_file);
 
     Draw *d;
     if (competition == "ucl")
-        d = new UCLDraw(teams);
+        d = new UCLDraw(input_file);
     else if (competition == "uel")
-        d = new UELDraw(teams);
+        d = new UELDraw(input_file);
     else if (competition == "uecl")
-        d = new UECLDraw(teams);
+        d = new UECLDraw(input_file);
 
     bool valid = d->draw(false);
     if (valid) {

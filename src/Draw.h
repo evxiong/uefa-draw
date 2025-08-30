@@ -4,6 +4,7 @@
 #include "globals.h"
 #include <chrono>
 #include <exception>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -16,10 +17,12 @@ class Draw {
     virtual bool verifyDraw(bool suppress = true) const;
 
   protected:
-    Draw(std::string input_path);
-    Draw(const std::vector<Team> &t);
+    Draw(const std::vector<Team> &t, int pots, int teamsPerPot,
+         int matchesPerTeam);
+    Draw(std::string input_path, int pots, int teamsPerPot,
+         int matchesPerTeam); // input_path: path to teams csv
     void generateAllGames();
-    void setParams(int pots, int teamsPerPot, int matchesPerTeam);
+    void drawTeam(int pot, bool suppress);
     virtual Game pickMatch();
     void updateDrawState(const Game &g, bool revert = false);
 
@@ -28,12 +31,20 @@ class Draw {
     DFS(const Game &g, const std::vector<Game> &remainingGames, int depth,
         const std::chrono::steady_clock::time_point &t0); // g is candidate game
 
+    // config
+    int numPots;
+    int numTeamsPerPot;
+    int numMatchesPerTeam;
+    int numTeams;
+    std::vector<Team> teams; // all Teams in draw
+    std::mt19937 randomEngine;
+
+    // current draw state
     std::vector<Game> allGames;      // remaining potential Games
     std::vector<Game> pickedMatches; // picked Games
     std::unordered_map<int, std::vector<Game *>>
-        gamesByTeam;         // for displayPots(); team ind -> Game ptrs to
-                             // pickedMatches
-    std::vector<Team> teams; // all Teams in draw
+        gamesByTeam; // for displayPots(); team ind -> Game ptrs to
+                     // pickedMatches
     std::unordered_map<std::string, int>
         numGamesByPotPair; // {home pot}:{away pot} -> # games
     std::unordered_map<int, int> numHomeGamesByTeam; // team ind -> # home games
@@ -42,41 +53,22 @@ class Draw {
         numOpponentCountryByTeam; // {team ind}:{opp country} -> count
     std::unordered_map<std::string, bool>
         hasPlayedWithPotMap; // {team ind}:{opp pot}:{h/a dep. on team ind}
-    int numPots;
-    int numTeamsPerPot;
-    int numMatchesPerTeam;
-    int numTeams;
 };
 
 class UCLDraw : public Draw {
   public:
-    UCLDraw() : Draw("data/teams/ucl.csv") {
-        setParams(4, 9, 8);
-    }
-    UCLDraw(std::string input_path) : Draw(input_path) {
-        setParams(4, 9, 8);
-    }
-    UCLDraw(const std::vector<Team> &t) : Draw(t) {
-        setParams(4, 9, 8);
-    }
+    UCLDraw(std::string input_path) : Draw(input_path, 4, 9, 8) {}
+    UCLDraw(const std::vector<Team> &t) : Draw(t, 4, 9, 8) {}
 };
 
 class UELDraw : public Draw {
   public:
-    UELDraw() : Draw("data/teams/uel.csv") {
-        setParams(4, 9, 8);
-    }
-    UELDraw(std::string input_path) : Draw(input_path) {
-        setParams(4, 9, 8);
-    }
-    UELDraw(const std::vector<Team> &t) : Draw(t) {
-        setParams(4, 9, 8);
-    }
+    UELDraw(std::string input_path) : Draw(input_path, 4, 9, 8) {}
+    UELDraw(const std::vector<Team> &t) : Draw(t, 4, 9, 8) {}
 };
 
 class UECLDraw : public Draw {
   public:
-    UECLDraw();
     UECLDraw(std::string input_path);
     UECLDraw(const std::vector<Team> &t);
     virtual bool verifyDraw(bool suppress = true) const;

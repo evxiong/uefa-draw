@@ -6,17 +6,9 @@
 #include <string>
 #include <vector>
 
-UECLDraw::UECLDraw() : Draw("data/teams/uecl.csv") {
-    setParams(6, 6, 6);
-}
+UECLDraw::UECLDraw(std::string input_path) : Draw(input_path, 6, 6, 6) {}
 
-UECLDraw::UECLDraw(std::string input_path) : Draw(input_path) {
-    setParams(6, 6, 6);
-}
-
-UECLDraw::UECLDraw(const std::vector<Team> &t) : Draw(t) {
-    setParams(6, 6, 6);
-}
+UECLDraw::UECLDraw(const std::vector<Team> &t) : Draw(t, 6, 6, 6) {}
 
 bool UECLDraw::verifyDraw(bool suppress) const {
     // check for correct total number of matches

@@ -9,23 +9,20 @@
 #include <string>
 #include <vector>
 
-Draw::Draw(const std::vector<Team> &t) {
-    teams = t;
-}
+Draw::Draw(const std::vector<Team> &t, int pots, int teamsPerPot,
+           int matchesPerTeam)
+    : numPots(pots), numTeamsPerPot(teamsPerPot),
+      numMatchesPerTeam(matchesPerTeam), numTeams(numPots * numTeamsPerPot),
+      teams(t), randomEngine(std::random_device{}()) {}
 
-Draw::Draw(std::string input_path) {
-    teams = readCSVTeams(input_path);
-}
+Draw::Draw(std::string input_path, int pots, int teamsPerPot,
+           int matchesPerTeam)
+    : numPots(pots), numTeamsPerPot(teamsPerPot),
+      numMatchesPerTeam(matchesPerTeam), numTeams(numPots * numTeamsPerPot),
+      teams(readCSVTeams(input_path)), randomEngine(std::random_device{}()) {}
 
 const std::vector<Game> &Draw::getSchedule() const {
     return pickedMatches;
-}
-
-void Draw::setParams(int pots, int teamsPerPot, int matchesPerTeam) {
-    numPots = pots;
-    numTeamsPerPot = teamsPerPot;
-    numMatchesPerTeam = matchesPerTeam;
-    numTeams = numPots * numTeamsPerPot;
 }
 
 void Draw::generateAllGames() {
@@ -61,22 +58,31 @@ bool Draw::validRemainingGame(const Game &g, const Game &aG) {
 bool Draw::draw(bool suppress) {
     try {
         generateAllGames();
-        std::random_device rd;
-        std::mt19937 g(rd());
+
         while (pickedMatches.size() <
                static_cast<size_t>(numTeams * numMatchesPerTeam / 2)) {
-            std::shuffle(allGames.begin(), allGames.end(), g);
-            Game g = pickMatch();
-            updateDrawState(g);
-            allGames.erase(std::remove_if(allGames.begin(), allGames.end(),
-                                          [&g, this](const Game &aG) {
-                                              return !validRemainingGame(g, aG);
-                                          }),
-                           allGames.end());
-            if (!suppress)
-                std::cout << teams[g.h].abbrev << "-" << teams[g.a].abbrev
-                          << "\t" << teams[g.h].pot << "-" << teams[g.a].pot
-                          << " " << allGames.size() << std::endl;
+            std::shuffle(allGames.begin(), allGames.end(), randomEngine);
+
+            // loop by pot
+            for (int pot = 1; pot <= numPots; pot++) {
+                for (int i = 0; i < numTeamsPerPot; i++) {
+                    drawTeam(pot, suppress);
+                }
+            }
+
+            // Game g = pickMatch();
+            // updateDrawState(g);
+            // allGames.erase(std::remove_if(allGames.begin(), allGames.end(),
+            //                               [&g, this](const Game &aG) {
+            //                                   return !validRemainingGame(g,
+            //                                   aG);
+            //                               }),
+            //                allGames.end());
+            // if (!suppress) {
+            //     std::cout << teams[g.h].abbrev << "-" << teams[g.a].abbrev
+            //               << "\t" << teams[g.h].pot << "-" << teams[g.a].pot
+            //               << " " << allGames.size() << std::endl;
+            // }
         }
         for (Game &m : pickedMatches) {
             gamesByTeam[m.h].push_back(&m);
@@ -121,10 +127,75 @@ void Draw::updateDrawState(const Game &g, bool revert) {
     }
 }
 
+void Draw::drawTeam(int pot, bool suppress) {
+    // if auto-picking, pick a random team out of the remaining teams in the
+    // current pot
+    // if interactive, allow picking random or specific team from terminal
+
+    // once team is picked, generate all remaining matches for this team.
+
+    // (auto-pick) shuffle teams in current pot
+    std::vector<int> teamIndices(numTeamsPerPot);
+    std::iota(teamIndices.begin(), teamIndices.end(),
+              (pot - 1) * numTeamsPerPot);
+    teamIndices.erase(std::remove_if(teamIndices.begin(), teamIndices.end(),
+                                     [this](int teamIndex) {
+                                         return numHomeGamesByTeam[teamIndex] ==
+                                                    numMatchesPerTeam / 2 ||
+                                                numAwayGamesByTeam[teamIndex] ==
+                                                    numMatchesPerTeam / 2;
+                                     }),
+                      teamIndices.end());
+    std::shuffle(teamIndices.begin(), teamIndices.end(), randomEngine);
+
+    int pickedTeamIndex = teamIndices[0];
+
+    // filter remaining games to only include those involving picked team
+    std::vector<Game> candidateGames;
+    std::copy_if(allGames.begin(), allGames.end(),
+                 std::back_inserter(candidateGames),
+                 [pickedTeamIndex](const Game &g) {
+                     if (g.h == pickedTeamIndex || g.a == pickedTeamIndex) {
+                         return true;
+                     }
+                 });
+
+    // stable sort candidate games by max pot between teams
+    // games within the same max pot between teams keep their shuffled order
+    // ex. for a team in pot 1, games will be grouped: 1-1,1-2,1-3,1-4
+    std::stable_sort(candidateGames.begin(), candidateGames.end(),
+                     [this](const Game &g1, const Game &g2) {
+                         return std::max(teams[g1.h].pot, teams[g1.a].pot) <
+                                std::max(teams[g2.h].pot, teams[g2.a].pot);
+                     });
+
+    // allocate all games for this team
+    // once a valid candidate game is found, update draw state
+    // any future candidate games that conflict will be rejected on first DFS
+    // call
+    for (const Game &cG : candidateGames) {
+        bool result = DFS(cG, allGames, 1, std::chrono::steady_clock::now());
+        if (result) {
+            // candidate game is valid
+            updateDrawState(cG);
+            allGames.erase(std::remove_if(allGames.begin(), allGames.end(),
+                                          [&cG, this](const Game &aG) {
+                                              return !validRemainingGame(cG,
+                                                                         aG);
+                                          }),
+                           allGames.end());
+            if (!suppress) {
+                std::cout << teams[cG.h].abbrev << "-" << teams[cG.a].abbrev
+                          << "\t" << teams[cG.h].pot << "-" << teams[cG.a].pot
+                          << " " << allGames.size() << std::endl;
+            }
+        }
+    }
+}
+
 Game Draw::pickMatch() {
     std::vector<Game> orderedRemainingGames(allGames);
 
-    // order remaining games by home pot, then away pot
     std::stable_sort(orderedRemainingGames.begin(), orderedRemainingGames.end(),
                      [this](const Game &g1, const Game &g2) {
                          if (teams[g1.h].pot < teams[g2.h].pot)
@@ -195,6 +266,8 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
 
     // cerr << "-> " << newRemainingGames.size() << std::endl;
 
+    // pick new team
+    // get first incomplete pot pair
     int potPairHomePot, potPairAwayPot; // 1-indexed
     bool done = false;
     for (int i = 1; i <= numPots; i++) {
@@ -211,10 +284,15 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
             break;
     }
 
+    // NEED TO PRIORITIZE TEAMS WHOSE COUNTRY HAS MOST TEAMS REMAINING,
+    // then by teams with most remaining matches
     int newHome;
-    std::vector<int> v(numTeamsPerPot);
-    std::iota(v.begin(), v.end(), (potPairHomePot - 1) * numTeamsPerPot);
-    for (int t : v) {
+    std::vector<int> teamIndices(numTeamsPerPot);
+    std::iota(teamIndices.begin(), teamIndices.end(),
+              (potPairHomePot - 1) * numTeamsPerPot);
+
+    // sort teamIndices by country with most teams remaining first
+    for (int t : teamIndices) {
         if (!hasPlayedWithPotMap[std::to_string(t) + ":" +
                                  std::to_string(potPairAwayPot) + ":h"]) {
             newHome = t;
@@ -222,6 +300,9 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
         }
     }
 
+    // filter newRemainingGames to only include games with newHomeTeam and
+    // matching away pot, then sort games by away team whose country has most
+    // teams, then by away team with most remaining matches
     for (const Game &rG : newRemainingGames) {
         if (rG.h == newHome && teams[rG.a].pot == potPairAwayPot) {
             bool result = DFS(rG, newRemainingGames, depth + 1, t0);
