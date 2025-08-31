@@ -22,14 +22,16 @@ class Draw {
     Draw(std::string input_path, int pots, int teamsPerPot,
          int matchesPerTeam); // input_path: path to teams csv
     void generateAllGames();
+    void sortRemainingGames(int sortMode);
+    bool testCandidateGame(const Game &cG);
     void drawTeam(int pot, bool suppress);
     virtual Game pickMatch();
     void updateDrawState(const Game &g, bool revert = false);
 
     virtual bool validRemainingGame(const Game &g, const Game &aG);
-    virtual bool
-    DFS(const Game &g, const std::vector<Game> &remainingGames, int depth,
-        const std::chrono::steady_clock::time_point &t0); // g is candidate game
+    virtual int DFS(const Game &g, const std::vector<Game> &remainingGames,
+                    int depth, const std::chrono::steady_clock::time_point &t0);
+    // return values: 0=reject, 1=accept, 2=timeout
 
     // config
     int numPots;
@@ -38,6 +40,8 @@ class Draw {
     int numTeams;
     std::vector<Team> teams; // all Teams in draw
     std::mt19937 randomEngine;
+    std::unordered_map<std::string, int>
+        numTeamsByCountry; // country -> # teams
 
     // current draw state
     std::vector<Game> allGames;      // remaining potential Games
@@ -53,6 +57,8 @@ class Draw {
         numOpponentCountryByTeam; // {team ind}:{opp country} -> count
     std::unordered_map<std::string, bool>
         hasPlayedWithPotMap; // {team ind}:{opp pot}:{h/a dep. on team ind}
+    std::unordered_set<std::string>
+        pickedMatchesTeamIndices; // {home team ind}:{away team ind}
 };
 
 class UCLDraw : public Draw {
@@ -76,9 +82,9 @@ class UECLDraw : public Draw {
   protected:
     virtual Game pickMatch();
     virtual bool validRemainingGame(const Game &g, const Game &aG);
-    virtual bool
-    DFS(const Game &g, const std::vector<Game> &remainingGames, int depth,
-        const std::chrono::steady_clock::time_point &t0); // g is candidate game
+    // virtual bool DFS(const Game &g, const std::vector<Game> &remainingGames,
+    //                  int depth,
+    //                  const std::chrono::steady_clock::time_point &t0);
 };
 
 class TimeoutException : public std::exception {

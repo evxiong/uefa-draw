@@ -13,7 +13,7 @@ UECLDraw::UECLDraw(const std::vector<Team> &t) : Draw(t, 6, 6, 6) {}
 bool UECLDraw::verifyDraw(bool suppress) const {
     // check for correct total number of matches
     int expectedMatches = numTeams * numMatchesPerTeam / 2;
-    if (pickedMatches.size() != expectedMatches) {
+    if (pickedMatches.size() != static_cast<size_t>(expectedMatches)) {
         if (!suppress)
             std::cout << "INVALID DRAW: drew " << pickedMatches.size()
                       << " matches but expected " << expectedMatches << "."
@@ -74,7 +74,8 @@ bool UECLDraw::verifyDraw(bool suppress) const {
     }
     for (auto &[teamInd, teamVerifierObj] : m) {
         // check for correct total num of opps
-        if (teamVerifierObj.opponents.size() != numMatchesPerTeam) {
+        if (teamVerifierObj.opponents.size() !=
+            static_cast<size_t>(numMatchesPerTeam)) {
             if (!suppress)
                 std::cout << "INVALID DRAW: " << teams[teamInd].abbrev
                           << " has been drawn against "
@@ -183,112 +184,116 @@ Game UECLDraw::pickMatch() {
     exit(2);
 }
 
-bool UECLDraw::DFS(const Game &g, const std::vector<Game> &remainingGames,
-                   int depth, const std::chrono::steady_clock::time_point &t0) {
-    // g is candidate game
+// bool UECLDraw::DFS(const Game &g, const std::vector<Game> &remainingGames,
+//                    int depth, const std::chrono::steady_clock::time_point
+//                    &t0) {
+//     // g is candidate game
 
-    // base case
+//     // base case
 
-    // reject:
+//     // reject:
 
-    // handle timeout
-    auto t1 = std::chrono::steady_clock::now();
-    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
-    if (diff.count() > 5000) // timeout after 5s of DFS
-    {
-        throw TimeoutException();
-    }
-    // return DFS(g, remainingGames, depth + 1, t0); // trigger timeout
+//     // handle timeout
+//     auto t1 = std::chrono::steady_clock::now();
+//     auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(t1 -
+//     t0); if (diff.count() > 5000) // timeout after 5s of DFS
+//     {
+//         throw TimeoutException();
+//     }
+//     // return DFS(g, remainingGames, depth + 1, t0); // trigger timeout
 
-    std::string homePot = std::to_string(teams[g.h].pot);
-    std::string awayPot = std::to_string(teams[g.a].pot);
+//     std::string homePot = std::to_string(teams[g.h].pot);
+//     std::string awayPot = std::to_string(teams[g.a].pot);
 
-    // is this check even nec if we are already filtering remainingGames? maybe
-    // add numOpponentCountryByTeam check to remainingGames predicate
-    if (numHomeGamesByTeam[g.h] == numMatchesPerTeam / 2 ||
-        numAwayGamesByTeam[g.a] == numMatchesPerTeam / 2 ||
-        hasPlayedWithPotMap[std::to_string(g.h) + ":" + awayPot + ":h"] ||
-        hasPlayedWithPotMap[std::to_string(g.a) + ":" + homePot + ":a"] ||
-        numOpponentCountryByTeam[std::to_string(g.h) + ":" +
-                                 teams[g.a].country] == 2 ||
-        numOpponentCountryByTeam[std::to_string(g.a) + ":" +
-                                 teams[g.h].country] == 2) {
-        // std::cout << "Entered base case return false"
-        return false;
-    }
+//     // is this check even nec if we are already filtering remainingGames?
+//     maybe
+//     // add numOpponentCountryByTeam check to remainingGames predicate
+//     if (numHomeGamesByTeam[g.h] == numMatchesPerTeam / 2 ||
+//         numAwayGamesByTeam[g.a] == numMatchesPerTeam / 2 ||
+//         hasPlayedWithPotMap[std::to_string(g.h) + ":" + awayPot + ":h"] ||
+//         hasPlayedWithPotMap[std::to_string(g.a) + ":" + homePot + ":a"] ||
+//         numOpponentCountryByTeam[std::to_string(g.h) + ":" +
+//                                  teams[g.a].country] == 2 ||
+//         numOpponentCountryByTeam[std::to_string(g.a) + ":" +
+//                                  teams[g.h].country] == 2) {
+//         // std::cout << "Entered base case return false"
+//         return false;
+//     }
 
-    // cerr << depth << "-  " << g.h << "-" << g.a << "  " <<
-    // remainingGames.size() << std::endl;
+//     // cerr << depth << "-  " << g.h << "-" << g.a << "  " <<
+//     // remainingGames.size() << std::endl;
 
-    // accept:
-    if (pickedMatches.size() == (numTeams * numMatchesPerTeam / 2) - 1) {
-        return true;
-    }
+//     // accept:
+//     if (pickedMatches.size() == (numTeams * numMatchesPerTeam / 2) - 1) {
+//         return true;
+//     }
 
-    // recursive case: g has been picked, update state, recurse, revert state
-    updateDrawState(g);
-    std::vector<Game> newRemainingGames;
-    std::copy_if(
-        remainingGames.begin(), remainingGames.end(),
-        std::back_inserter(newRemainingGames),
-        [&g, this](const Game &rG) { return validRemainingGame(g, rG); });
+//     // recursive case: g has been picked, update state, recurse, revert state
+//     updateDrawState(g);
+//     std::vector<Game> newRemainingGames;
+//     std::copy_if(
+//         remainingGames.begin(), remainingGames.end(),
+//         std::back_inserter(newRemainingGames),
+//         [&g, this](const Game &rG) { return validRemainingGame(g, rG); });
 
-    // cerr << "-> " << newRemainingGames.size() << std::endl;
+//     // cerr << "-> " << newRemainingGames.size() << std::endl;
 
-    // need to randomly choose home or away within paired pots
-    // handle all matches + home/away alloc pot-by-pot over 6 choose 2 pots:
-    // 1-1, 1-2, 1-3, 1-4, 1-5, 1-6, 2-2, 2-3, etc.
+//     // need to randomly choose home or away within paired pots
+//     // handle all matches + home/away alloc pot-by-pot over 6 choose 2 pots:
+//     // 1-1, 1-2, 1-3, 1-4, 1-5, 1-6, 2-2, 2-3, etc.
 
-    // do within pot: 1-1, 2-2, 3-3, 4-4, 5-5, 6-6
-    // then order by paired pots: 1-2/2-1, 1-3/3-1, 1-4/4-1
-    int pot1, pot2; // 1-indexed
-    bool done = false;
-    for (int i = 1; i <= numPots; i++) {
-        for (int j = i; j <= numPots; j++) {
-            if ((i == j &&
-                 numGamesByPotPair[std::to_string(i) + ":" +
-                                   std::to_string(j)] < numTeamsPerPot / 2) ||
-                (i != j && numGamesByPotPair[std::to_string(i) + ":" +
-                                             std::to_string(j)] +
-                                   numGamesByPotPair[std::to_string(j) + ":" +
-                                                     std::to_string(i)] <
-                               numTeamsPerPot)) {
-                pot1 = i;
-                pot2 = j;
-                done = true;
-                break;
-            }
-        }
-        if (done)
-            break;
-    }
+//     // do within pot: 1-1, 2-2, 3-3, 4-4, 5-5, 6-6
+//     // then order by paired pots: 1-2/2-1, 1-3/3-1, 1-4/4-1
+//     int pot1, pot2; // 1-indexed
+//     bool done = false;
+//     for (int i = 1; i <= numPots; i++) {
+//         for (int j = i; j <= numPots; j++) {
+//             if ((i == j &&
+//                  numGamesByPotPair[std::to_string(i) + ":" +
+//                                    std::to_string(j)] < numTeamsPerPot / 2)
+//                                    ||
+//                 (i != j && numGamesByPotPair[std::to_string(i) + ":" +
+//                                              std::to_string(j)] +
+//                                    numGamesByPotPair[std::to_string(j) + ":"
+//                                    +
+//                                                      std::to_string(i)] <
+//                                numTeamsPerPot)) {
+//                 pot1 = i;
+//                 pot2 = j;
+//                 done = true;
+//                 break;
+//             }
+//         }
+//         if (done)
+//             break;
+//     }
 
-    // int newHome;
-    // std::vector<int> v(numTeamsPerPot);
-    // std::iota(v.begin(), v.end(), (potPairHomePot - 1) * numTeamsPerPot);
-    // for (int t : v)
-    // {
-    //     if (!hasPlayedWithPotMap[std::to_string(t) + ":" +
-    //     std::to_string(potPairAwayPot) + ":h"])
-    //     {
-    //         newHome = t;
-    //         break;
-    //     }
-    // }
+//     // int newHome;
+//     // std::vector<int> v(numTeamsPerPot);
+//     // std::iota(v.begin(), v.end(), (potPairHomePot - 1) * numTeamsPerPot);
+//     // for (int t : v)
+//     // {
+//     //     if (!hasPlayedWithPotMap[std::to_string(t) + ":" +
+//     //     std::to_string(potPairAwayPot) + ":h"])
+//     //     {
+//     //         newHome = t;
+//     //         break;
+//     //     }
+//     // }
 
-    for (const Game &rG : newRemainingGames) {
-        // if (rG.h == newHome && teams[rG.a].pot == potPairAwayPot)
-        if ((teams[rG.h].pot == pot1 && teams[rG.a].pot == pot2) ||
-            (teams[rG.a].pot == pot1 && teams[rG.h].pot == pot2)) {
-            bool result = DFS(rG, newRemainingGames, depth + 1, t0);
-            if (result) {
-                // revert state
-                updateDrawState(g, true);
-                return true;
-            }
-        }
-    }
+//     for (const Game &rG : newRemainingGames) {
+//         // if (rG.h == newHome && teams[rG.a].pot == potPairAwayPot)
+//         if ((teams[rG.h].pot == pot1 && teams[rG.a].pot == pot2) ||
+//             (teams[rG.a].pot == pot1 && teams[rG.h].pot == pot2)) {
+//             bool result = DFS(rG, newRemainingGames, depth + 1, t0);
+//             if (result) {
+//                 // revert state
+//                 updateDrawState(g, true);
+//                 return true;
+//             }
+//         }
+//     }
 
-    updateDrawState(g, true);
-    return false;
-}
+//     updateDrawState(g, true);
+//     return false;
+// }

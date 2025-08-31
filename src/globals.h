@@ -17,6 +17,8 @@
 #define BLACK "\033[30m"   /* Black */
 #define BOLD "\033[1m"     /* Bold */
 
+extern const std::string POT_COLORS[];
+
 const int NUM_POTS = 4;
 const int NUM_TEAMS_PER_POT = 9;
 const int NUM_MATCHES_PER_TEAM = 8;
