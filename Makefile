@@ -6,7 +6,7 @@ BASE_CXXFLAGS := -Wall -Wextra -std=c++17 -Isrc -Iinclude
 ifeq ($(DRIVER),main)
 CXXFLAGS := $(BASE_CXXFLAGS) -O3
 else
-CXXFLAGS := $(BASE_CXXFLAGS)
+CXXFLAGS := $(BASE_CXXFLAGS) -O3
 endif
 
 # Folders

@@ -22,15 +22,17 @@ class Draw {
     Draw(std::string input_path, int pots, int teamsPerPot,
          int matchesPerTeam); // input_path: path to teams csv
     void generateAllGames();
-    void sortRemainingGames(int sortMode);
+    void sortRemainingGames(int sortMode, std::vector<Game> &remainingGames);
     bool testCandidateGame(const Game &cG);
     void drawTeam(int pot, bool suppress);
+    int pickTeamIndex(int pot);
     virtual Game pickMatch();
     void updateDrawState(const Game &g, bool revert = false);
 
     virtual bool validRemainingGame(const Game &g, const Game &aG);
     virtual int DFS(const Game &g, const std::vector<Game> &remainingGames,
-                    int depth, const std::chrono::steady_clock::time_point &t0);
+                    int depth, const std::chrono::steady_clock::time_point &t0,
+                    int sortMode);
     // return values: 0=reject, 1=accept, 2=timeout
 
     // config
@@ -46,9 +48,8 @@ class Draw {
     // current draw state
     std::vector<Game> allGames;      // remaining potential Games
     std::vector<Game> pickedMatches; // picked Games
-    std::unordered_map<int, std::vector<Game *>>
-        gamesByTeam; // for displayPots(); team ind -> Game ptrs to
-                     // pickedMatches
+    std::unordered_map<int, std::vector<Game>>
+        gamesByTeam; // team ind -> picked Games
     std::unordered_map<std::string, int>
         numGamesByPotPair; // {home pot}:{away pot} -> # games
     std::unordered_map<int, int> numHomeGamesByTeam; // team ind -> # home games
@@ -58,7 +59,8 @@ class Draw {
     std::unordered_map<std::string, bool>
         hasPlayedWithPotMap; // {team ind}:{opp pot}:{h/a dep. on team ind}
     std::unordered_set<std::string>
-        pickedMatchesTeamIndices; // {home team ind}:{away team ind}
+        pickedMatchesTeamIndices;             // {home team ind}:{away team ind}
+    std::unordered_set<int> drawnTeamIndices; // team inds drawn so far
 };
 
 class UCLDraw : public Draw {
@@ -80,7 +82,7 @@ class UECLDraw : public Draw {
     virtual bool verifyDraw(bool suppress = true) const;
 
   protected:
-    virtual Game pickMatch();
+    // virtual Game pickMatch();
     virtual bool validRemainingGame(const Game &g, const Game &aG);
     // virtual bool DFS(const Game &g, const std::vector<Game> &remainingGames,
     //                  int depth,

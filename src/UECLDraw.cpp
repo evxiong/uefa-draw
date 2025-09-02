@@ -147,42 +147,45 @@ bool UECLDraw::validRemainingGame(const Game &g, const Game &aG) {
     return true;
 }
 
-Game UECLDraw::pickMatch() {
-    std::vector<Game> orderedRemainingGames(allGames);
+// Game UECLDraw::pickMatch() {
+//     std::vector<Game> orderedRemainingGames(allGames);
 
-    // order remaining games by min pot, then max pot
-    std::stable_sort(orderedRemainingGames.begin(), orderedRemainingGames.end(),
-                     [this](const Game &g1, const Game &g2) {
-                         int g1min = std::min(teams[g1.h].pot, teams[g1.a].pot);
-                         int g1max = std::max(teams[g1.h].pot, teams[g1.a].pot);
-                         int g2min = std::min(teams[g2.h].pot, teams[g2.a].pot);
-                         int g2max = std::max(teams[g2.h].pot, teams[g2.a].pot);
-                         if (g1min == g1max && g2min != g2max)
-                             return true;
-                         if (g1min != g1max && g2min == g2max)
-                             return false;
-                         if (g1min == g2min)
-                             return g1max < g2max;
-                         return g1min < g2min;
-                     });
+//     // order remaining games by min pot, then max pot
+//     std::stable_sort(orderedRemainingGames.begin(),
+//     orderedRemainingGames.end(),
+//                      [this](const Game &g1, const Game &g2) {
+//                          int g1min = std::min(teams[g1.h].pot,
+//                          teams[g1.a].pot); int g1max =
+//                          std::max(teams[g1.h].pot, teams[g1.a].pot); int
+//                          g2min = std::min(teams[g2.h].pot, teams[g2.a].pot);
+//                          int g2max = std::max(teams[g2.h].pot,
+//                          teams[g2.a].pot); if (g1min == g1max && g2min !=
+//                          g2max)
+//                              return true;
+//                          if (g1min != g1max && g2min == g2max)
+//                              return false;
+//                          if (g1min == g2min)
+//                              return g1max < g2max;
+//                          return g1min < g2min;
+//                      });
 
-    // for (const Game &g : orderedRemainingGames)
-    // {
-    //     std::cout << teams[g.h].pot << "-" << teams[g.a].pot << " ";
-    // }
-    // std::cout << std::endl;
-    // exit(2);
+//     // for (const Game &g : orderedRemainingGames)
+//     // {
+//     //     std::cout << teams[g.h].pot << "-" << teams[g.a].pot << " ";
+//     // }
+//     // std::cout << std::endl;
+//     // exit(2);
 
-    for (const Game &g : orderedRemainingGames) {
-        bool result = DFS(g, allGames, 1, std::chrono::steady_clock::now());
+//     for (const Game &g : orderedRemainingGames) {
+//         bool result = DFS(g, allGames, 1, std::chrono::steady_clock::now());
 
-        if (result) {
-            return g;
-        }
-    }
-    std::cout << "pickMatch error" << std::endl;
-    exit(2);
-}
+//         if (result) {
+//             return g;
+//         }
+//     }
+//     std::cout << "pickMatch error" << std::endl;
+//     exit(2);
+// }
 
 // bool UECLDraw::DFS(const Game &g, const std::vector<Game> &remainingGames,
 //                    int depth, const std::chrono::steady_clock::time_point
