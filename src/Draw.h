@@ -13,33 +13,35 @@ class Draw {
     bool draw(bool suppress = true); // returns false if timeout
     void displayPots() const;
     const std::vector<Game> &getSchedule() const;
-
-    virtual bool verifyDraw(bool suppress = true) const;
+    bool verifyDraw(bool suppress = true) const;
 
   protected:
     Draw(const std::vector<Team> &t, int pots, int teamsPerPot,
-         int matchesPerTeam);
-    Draw(std::string input_path, int pots, int teamsPerPot,
-         int matchesPerTeam); // input_path: path to teams csv
-    void generateAllGames();
-    void sortRemainingGames(int sortMode, std::vector<Game> &remainingGames);
-    bool testCandidateGame(const Game &cG);
-    void drawTeam(int pot, bool suppress);
-    int pickTeamIndex(int pot);
-    virtual Game pickMatch();
-    void updateDrawState(const Game &g, bool revert = false);
+         int matchesPerTeam, int matchesPerPotPair);
+    Draw(std::string input_path, int pots, int teamsPerPot, int matchesPerTeam,
+         int matchesPerPotPair); // input_path: path to teams csv
 
-    virtual bool validRemainingGame(const Game &g, const Game &aG);
-    virtual int DFS(const Game &g, const std::vector<Game> &remainingGames,
-                    int depth, const std::chrono::steady_clock::time_point &t0,
-                    int sortMode);
-    // return values: 0=reject, 1=accept, 2=timeout
+    void generateAllGames();
+    void sortRemainingGames(std::vector<Game> &remainingGames, int sortMode);
+    int pickTeamIndex(int pot);
+    void updateDrawState(const Game &g, bool revert = false);
+    int DFS(const Game &g, const std::vector<Game> &remainingGames, int depth,
+            const std::chrono::steady_clock::time_point &t0,
+            int sortMode); // return values: 0=reject, 1=accept, 2=timeout
+
+    virtual Game pickMatch();
+    virtual bool validRemainingGame(const Game &g);
+    virtual bool DFSHomeTeamPredicate(int homeTeamIndex, int awayPot);
+    virtual bool verifyDrawHomeAway(std::unordered_map<int, DrawVerifier> &m,
+                                    int homeTeamIndex, int awayTeamIndex,
+                                    bool suppress) const;
 
     // config
     int numPots;
     int numTeamsPerPot;
     int numMatchesPerTeam;
     int numTeams;
+    int numMatchesPerPotPair;
     std::vector<Team> teams; // all Teams in draw
     std::mt19937 randomEngine;
     std::unordered_map<std::string, int>
@@ -65,28 +67,27 @@ class Draw {
 
 class UCLDraw : public Draw {
   public:
-    UCLDraw(std::string input_path) : Draw(input_path, 4, 9, 8) {}
-    UCLDraw(const std::vector<Team> &t) : Draw(t, 4, 9, 8) {}
+    UCLDraw(std::string input_path) : Draw(input_path, 4, 9, 8, 9) {}
+    UCLDraw(const std::vector<Team> &t) : Draw(t, 4, 9, 8, 9) {}
 };
 
 class UELDraw : public Draw {
   public:
-    UELDraw(std::string input_path) : Draw(input_path, 4, 9, 8) {}
-    UELDraw(const std::vector<Team> &t) : Draw(t, 4, 9, 8) {}
+    UELDraw(std::string input_path) : Draw(input_path, 4, 9, 8, 9) {}
+    UELDraw(const std::vector<Team> &t) : Draw(t, 4, 9, 8, 9) {}
 };
 
 class UECLDraw : public Draw {
   public:
     UECLDraw(std::string input_path);
     UECLDraw(const std::vector<Team> &t);
-    virtual bool verifyDraw(bool suppress = true) const;
 
   protected:
-    // virtual Game pickMatch();
-    virtual bool validRemainingGame(const Game &g, const Game &aG);
-    // virtual bool DFS(const Game &g, const std::vector<Game> &remainingGames,
-    //                  int depth,
-    //                  const std::chrono::steady_clock::time_point &t0);
+    virtual bool validRemainingGame(const Game &g);
+    virtual bool DFSHomeTeamPredicate(int homeTeamIndex, int awayPot);
+    virtual bool verifyDrawHomeAway(std::unordered_map<int, DrawVerifier> &m,
+                                    int homeTeamIndex, int awayTeamIndex,
+                                    bool suppress) const;
 };
 
 class TimeoutException : public std::exception {

@@ -8,14 +8,12 @@
 
 // Terminal colors
 #define RESET "\033[0m"
-#define RED "\033[31m"     /* Red */
-#define YELLOW "\033[33m"  /* Yellow */
-#define GREEN "\033[32m"   /* Green */
-#define BLUE "\033[34m"    /* Blue */
-#define CYAN "\033[36m"    /* Cyan */
-#define MAGENTA "\033[35m" /* Magenta */
-#define BLACK "\033[30m"   /* Black */
-#define BOLD "\033[1m"     /* Bold */
+#define RED "\033[91m"     /* Red */
+#define BLUE "\033[94m"    /* Blue */
+#define GREEN "\033[92m"   /* Green */
+#define YELLOW "\033[93m"  /* Yellow */
+#define CYAN "\033[96m"    /* Cyan */
+#define MAGENTA "\033[95m" /* Magenta */
 
 extern const std::string POT_COLORS[];
 

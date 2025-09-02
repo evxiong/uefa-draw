@@ -1,3 +1,5 @@
+// Simulate draws
+
 #include "Draw.h"
 #include "Simulator.h"
 #include <iostream>
@@ -50,16 +52,3 @@ int main(int argc, char **argv) {
     s.run(iterations);
     return 0;
 }
-
-// int main()
-// {
-//     // UCL ucl;
-//     // ucl.draw(false);
-//     // ucl.displayPots();
-//     // ucl.verifyDraw(false);
-//     Draw *ucl = new UECLDraw();
-//     // UCLDraw ucl;
-//     ucl->draw(false);
-//     ucl->displayPots();
-//     ucl->verifyDraw(false);
-// }

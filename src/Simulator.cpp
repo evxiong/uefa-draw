@@ -44,6 +44,10 @@ void Simulator::run(int iterations) {
             d = new UELDraw(teams);
         else if (competition == "uecl")
             d = new UECLDraw(teams);
+        else {
+            std::cout << "Invalid competition specified" << std::endl;
+            exit(1);
+        }
         d->draw();
         bool success = d->verifyDraw();
 

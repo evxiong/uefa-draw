@@ -1,3 +1,5 @@
+// Run single simulation with full output displayed
+
 #include "Draw.h"
 #include "Simulator.h"
 #include "globals.h"
@@ -39,6 +41,11 @@ int main(int argc, char **argv) {
         d = new UELDraw(input_file);
     else if (competition == "uecl")
         d = new UECLDraw(input_file);
+    else {
+        std::cerr << "Invalid competition type: must be 'ucl', 'uel', or 'uecl'"
+                  << std::endl;
+        exit(1);
+    }
 
     bool valid = d->draw(false);
     if (valid) {
