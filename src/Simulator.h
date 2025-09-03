@@ -16,10 +16,7 @@ class Simulator {
 
   private:
     void writeResults() const;
-    void updateCounts(const std::vector<Game> &s);
 
-    int failures;
-    int year;
     std::string competition; // 'ucl', 'uel', or 'uecl'
     std::string input_file;
     std::filesystem::path output_path;

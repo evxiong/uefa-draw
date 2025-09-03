@@ -2,22 +2,26 @@
 #include "Draw.h"
 #include "globals.h"
 #include "utils.h"
+#include <BS_thread_pool/BS_thread_pool.hpp>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <indicators/indicators.hpp>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 
-Simulator::Simulator(int y, std::string c, std::string input,
+Simulator::Simulator(int year, std::string c, std::string input,
                      std::string output)
-    : failures(0), year(y), competition(c) {
+    : competition(c) {
     input_file = (input == "") ? "data/" + std::to_string(year) + "/teams/" +
                                      competition + ".csv"
                                : input;
     output_path = std::filesystem::u8path(
-        (output == "") ? "analysis/sim/" + competition + ".csv" : output);
+        (output == "") ? "analysis/" + std::to_string(year) + "/sim/" +
+                             competition + ".csv"
+                       : output);
 
     // read input file csv to get teams
     teams = readCSVTeams(input_file);
@@ -25,72 +29,137 @@ Simulator::Simulator(int y, std::string c, std::string input,
 
 void Simulator::run(int iterations) {
     indicators::show_console_cursor(false);
-    using namespace indicators;
-    BlockProgressBar bar{
-        option::BarWidth{80}, option::ForegroundColor{Color::white},
-        option::FontStyles{std::vector<FontStyle>{FontStyle::bold}},
-        option::MaxProgress{iterations}};
+    indicators::BlockProgressBar bar{
+        indicators::option::BarWidth{64},
+        indicators::option::ForegroundColor{indicators::Color::white},
+        indicators::option::FontStyles{
+            std::vector<indicators::FontStyle>{indicators::FontStyle::bold}},
+        indicators::option::MaxProgress{iterations},
+        indicators::option::ShowElapsedTime{true},
+        indicators::option::ShowRemainingTime{true},
+    };
 
     std::cout << "Simulating " << iterations << " draws..." << std::endl;
 
-    float total = 0;
-    int i = 0;
+    const int numThreads = std::thread::hardware_concurrency();
+    BS::thread_pool pool(numThreads);
 
-    while (i < iterations) {
-        auto t0 = std::chrono::steady_clock::now();
-        Draw *d;
-        if (competition == "ucl")
-            d = new UCLDraw(teams);
-        else if (competition == "uel")
-            d = new UELDraw(teams);
-        else if (competition == "uecl")
-            d = new UECLDraw(teams);
-        else {
-            std::cout << "Invalid competition specified" << std::endl;
-            exit(1);
-        }
-        d->draw();
-        bool success = d->verifyDraw();
+    // each thread keeps its own counts
+    std::vector<std::unordered_map<std::string, int>> threadCounts(numThreads);
+    std::vector<std::thread::id> threadIds = pool.get_thread_ids();
+    std::unordered_map<std::thread::id, int> indexByThreadId;
+    for (int i = 0; static_cast<size_t>(i) < threadIds.size(); i++) {
+        indexByThreadId[threadIds[i]] = i;
+    }
 
-        auto t1 = std::chrono::steady_clock::now();
-        auto diff =
-            std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
-        total += float(diff.count()) / 1000;
+    // track progress
+    std::atomic<int> failures{0};
+    std::atomic<int> completed{0};
+    std::atomic<int> duration{0}; // ms
 
-        if (success) {
-            updateCounts(d->getSchedule());
-        }
+    auto tStart = std::chrono::steady_clock::now();
 
-        // Show iteration as postfix text
-        bar.set_option(option::PostfixText{
-            std::to_string(i + 1) + "/" + std::to_string(iterations) + " (" +
-            std::to_string(total / (i + 1)) + "s" + ")"});
+    for (int i = 0; i < iterations; i++) {
+        pool.detach_task([this, i, &pool, &indexByThreadId, &threadCounts,
+                          &duration, &completed, &failures] {
+            auto t0 = std::chrono::steady_clock::now();
+            bool success = false;
+            std::unique_ptr<Draw> d;
+            while (!success) {
+                if (competition == "ucl")
+                    d.reset(new UCLDraw(teams));
+                else if (competition == "uel")
+                    d.reset(new UELDraw(teams));
+                else if (competition == "uecl")
+                    d.reset(new UECLDraw(teams));
+                else {
+                    std::cout << "Invalid competition specified" << std::endl;
+                    exit(1);
+                }
+                d->draw();
+                success = d->verifyDraw();
+                if (!success) {
+                    // update failures
+                    failures.fetch_add(1, std::memory_order_relaxed);
+                }
+            }
+            // update total duration
+            auto t1 = std::chrono::steady_clock::now();
+            auto diff =
+                std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+            duration.fetch_add(diff.count(), std::memory_order_relaxed);
 
-        if (success) {
-            // update progress bar
-            bar.tick();
-            i += 1;
-        } else {
-            failures += 1;
+            // update thread counts
+            std::thread::id threadId = std::this_thread::get_id();
+            std::vector<Game> pickedMatches = d->getSchedule();
+            for (const Game &g : pickedMatches) {
+                threadCounts[indexByThreadId.at(threadId)]
+                            [std::to_string(g.h) + ":" + std::to_string(g.a)] +=
+                    1;
+            }
+
+            // update completed count
+            completed.fetch_add(1, std::memory_order_relaxed);
+        });
+    }
+
+    // update progress bar
+    while (completed.load() < iterations) {
+        int i = completed.load();
+        auto tCurrent = std::chrono::steady_clock::now();
+        bar.set_option(indicators::option::PostfixText{
+            std::to_string(i) + "/" + std::to_string(iterations) + " (" +
+            std::to_string(duration.load() / static_cast<float>(1000 * i)) +
+            "s / " +
+            std::to_string(
+                std::chrono::duration_cast<std::chrono::milliseconds>(tCurrent -
+                                                                      tStart)
+                    .count() /
+                static_cast<float>(1000 * i)) +
+            "s)"});
+        bar.set_progress(i);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    pool.wait();
+
+    // progress bar complete
+    auto tCurrent = std::chrono::steady_clock::now();
+    bar.set_option(indicators::option::PostfixText{
+        std::to_string(iterations) + "/" + std::to_string(iterations) + " (" +
+        std::to_string(duration.load() /
+                       static_cast<float>(1000 * iterations)) +
+        "s / " +
+        std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+                           tCurrent - tStart)
+                           .count() /
+                       static_cast<float>(1000 * iterations)) +
+        "s)"});
+    bar.set_progress(iterations);
+    bar.mark_as_completed();
+    indicators::show_console_cursor(true);
+
+    // combine thread counts
+    for (std::unordered_map<std::string, int> &local : threadCounts) {
+        for (std::pair<const std::string, int> &kv : local) {
+            counts[kv.first] += kv.second;
         }
     }
-    bar.mark_as_completed();
-
-    // Show cursor
-    indicators::show_console_cursor(true);
 
     writeResults();
 
-    std::cout << "Failures: " << failures << std::endl;
-    std::cout << "Avg time: " << total / iterations << "s" << std::endl;
+    std::cout << "Failures: " << failures.load() << std::endl;
+    std::cout << "Avg time per thread: "
+              << duration.load() / static_cast<float>(1000 * iterations) << "s"
+              << std::endl;
+    std::cout << "Elapsed time per simulation: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     tCurrent - tStart)
+                         .count() /
+                     static_cast<float>(1000 * iterations)
+              << "s" << std::endl;
     std::cout << "Wrote results to " << output_path.string() << "."
               << std::endl;
-}
-
-void Simulator::updateCounts(const std::vector<Game> &s) {
-    for (const Game &g : s) {
-        counts[std::to_string(g.h) + ":" + std::to_string(g.a)] += 1;
-    }
 }
 
 void Simulator::writeResults() const {
