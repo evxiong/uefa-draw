@@ -3,6 +3,7 @@
 
 #include "Draw.h"
 #include "globals.h"
+#include <filesystem>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -21,7 +22,7 @@ class Simulator {
     int year;
     std::string competition; // 'ucl', 'uel', or 'uecl'
     std::string input_file;
-    std::string output_file;
+    std::filesystem::path output_path;
     std::vector<Team> teams;
     std::unordered_map<std::string, int> counts; // {homeInd}:{awayInd} -> count
 };

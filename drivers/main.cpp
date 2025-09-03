@@ -14,7 +14,6 @@ int main(int argc, char **argv) {
     int iterations = 1;
     std::string input = "";
     std::string output = "";
-    std::string competition = "";
 
     if (argc > 5) {
         std::cerr << "Too many arguments" << std::endl;

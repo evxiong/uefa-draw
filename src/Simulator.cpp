@@ -3,6 +3,7 @@
 #include "globals.h"
 #include "utils.h"
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <indicators/indicators.hpp>
 #include <iostream>
@@ -15,8 +16,8 @@ Simulator::Simulator(int y, std::string c, std::string input,
     input_file = (input == "") ? "data/" + std::to_string(year) + "/teams/" +
                                      competition + ".csv"
                                : input;
-    output_file =
-        (output == "") ? "analysis/sim/" + competition + ".csv" : output;
+    output_path = std::filesystem::u8path(
+        (output == "") ? "analysis/sim/" + competition + ".csv" : output);
 
     // read input file csv to get teams
     teams = readCSVTeams(input_file);
@@ -82,7 +83,8 @@ void Simulator::run(int iterations) {
 
     std::cout << "Failures: " << failures << std::endl;
     std::cout << "Avg time: " << total / iterations << "s" << std::endl;
-    std::cout << "Wrote results to " << output_file << "." << std::endl;
+    std::cout << "Wrote results to " << output_path.string() << "."
+              << std::endl;
 }
 
 void Simulator::updateCounts(const std::vector<Game> &s) {
@@ -92,7 +94,8 @@ void Simulator::updateCounts(const std::vector<Game> &s) {
 }
 
 void Simulator::writeResults() const {
-    std::ofstream out(output_file);
+    std::filesystem::create_directories(output_path.parent_path());
+    std::ofstream out(output_path);
     out << "t1,t2,home,away,total\n";
     for (int i = 0; i < NUM_TEAMS - 1; i++) {
         for (int j = i + 1; j < NUM_TEAMS; j++) {
