@@ -41,10 +41,6 @@ struct Game {
     bool operator==(const Game &rhs) {
         return (h == rhs.h && a == rhs.a);
     }
-    Game(const Game &rhs) {
-        h = rhs.h;
-        a = rhs.a;
-    }
 };
 
 struct DrawVerifier {
@@ -53,6 +49,21 @@ struct DrawVerifier {
     std::unordered_map<std::string, bool>
         hasPlayedWithPot; // {opponent_pot}:{h/a}
     std::unordered_map<int, int> numMatchesPerPot;
+};
+
+// current draw state, used in DFS
+struct DFSContext {
+    std::vector<Game> pickedMatches;
+    std::unordered_map<std::string, int>
+        numGamesByPotPair; // {home pot}:{away pot} -> # games
+    std::unordered_map<int, int> numHomeGamesByTeam; // team ind -> # home games
+    std::unordered_map<int, int> numAwayGamesByTeam; // team ind -> # away games
+    std::unordered_map<std::string, int>
+        numOpponentCountryByTeam; // {team ind}:{opp country} -> count
+    std::unordered_map<std::string, bool>
+        hasPlayedWithPotMap; // {team ind}:{opp pot}:{h/a dep. on team ind}
+    std::unordered_set<std::string>
+        pickedMatchesTeamIndices; // {home team ind}:{away team ind}
 };
 
 #endif // GLOBALS_H

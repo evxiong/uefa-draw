@@ -2,6 +2,8 @@
 #define DRAW_H
 
 #include "globals.h"
+#include <BS_thread_pool/BS_thread_pool.hpp>
+#include <atomic>
 #include <chrono>
 #include <exception>
 #include <random>
@@ -11,6 +13,7 @@
 class Draw {
   public:
     bool draw(bool suppress = true); // returns false if timeout
+    bool draw(BS::light_thread_pool &pool);
     void displayPots() const;
     const std::vector<Game> &getSchedule() const;
     bool verifyDraw(bool suppress = true) const;
@@ -25,16 +28,27 @@ class Draw {
     void sortRemainingGames(std::vector<Game> &remainingGames, int sortMode);
     int pickTeamIndex(int pot);
     void updateDrawState(const Game &g, bool revert = false);
-    int DFS(const Game &g, const std::vector<Game> &remainingGames, int depth,
+    int DFS(const Game &g, const std::vector<Game> &remainingGames,
             const std::chrono::steady_clock::time_point &t0,
             int sortMode); // return values: 0=reject, 1=accept, 2=timeout
+    Game pickMatch();
+    Game pickMatch(BS::light_thread_pool &pool);
 
-    virtual Game pickMatch();
     virtual bool validRemainingGame(const Game &g);
     virtual bool DFSHomeTeamPredicate(int homeTeamIndex, int awayPot);
     virtual bool verifyDrawHomeAway(std::unordered_map<int, DrawVerifier> &m,
                                     int homeTeamIndex, int awayTeamIndex,
                                     bool suppress) const;
+
+    // multithread versions
+    DFSContext createDFSContext();
+    bool DFS(const Game &g, const std::vector<Game> &remainingGames,
+             DFSContext &context, int sortMode, std::atomic<bool> &stop);
+    virtual bool validRemainingGame(const Game &g, const DFSContext &context);
+    void updateDrawState(const Game &g, DFSContext &context,
+                         bool revert = false);
+    virtual bool DFSHomeTeamPredicate(int homeTeamIndex, int awayPot,
+                                      const DFSContext &context) const;
 
     // config
     int numPots;
@@ -88,6 +102,11 @@ class UECLDraw : public Draw {
     virtual bool verifyDrawHomeAway(std::unordered_map<int, DrawVerifier> &m,
                                     int homeTeamIndex, int awayTeamIndex,
                                     bool suppress) const;
+
+    // multithread versions
+    virtual bool validRemainingGame(const Game &g, const DFSContext &context);
+    virtual bool DFSHomeTeamPredicate(int homeTeamIndex, int awayPot,
+                                      const DFSContext &context) const;
 };
 
 class TimeoutException : public std::exception {

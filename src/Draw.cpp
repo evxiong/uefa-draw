@@ -1,12 +1,16 @@
 #include "Draw.h"
 #include "globals.h"
 #include "utils.h"
+#include <BS_thread_pool/BS_thread_pool.hpp>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <future>
 #include <iostream>
 #include <numeric>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 const std::string POT_COLORS[] = {RED, BLUE, GREEN, YELLOW, CYAN, MAGENTA};
@@ -79,6 +83,43 @@ bool Draw::validRemainingGame(const Game &g) {
             2 || // Game's home team has faced max opps from away team's country
         numOpponentCountryByTeam[std::to_string(g.a) + ":" +
                                  teams[g.h].country] ==
+            2 // Game's away team has faced max opps from home team's country
+    ) {
+        return false;
+    }
+    return true;
+}
+
+bool Draw::validRemainingGame(const Game &g, const DFSContext &context) {
+    // g is Game under consideration; return true if Game is valid (should be
+    // kept), false if invalid (should be removed)
+    std::string homePot = std::to_string(teams[g.h].pot);
+    std::string awayPot = std::to_string(teams[g.a].pot);
+    if (context.pickedMatchesTeamIndices.count(
+            std::to_string(g.h) + ":" +
+            std::to_string(g.a)) || // Game already picked
+        context.pickedMatchesTeamIndices.count(
+            std::to_string(g.a) + ":" +
+            std::to_string(g.h)) || // Game's reverse fixture already picked
+        get_or(context.numHomeGamesByTeam, g.h, 0) ==
+            numMatchesPerTeam /
+                2 || // Game's home team already has enough home games
+        get_or(context.numAwayGamesByTeam, g.a, 0) ==
+            numMatchesPerTeam /
+                2 || // Game's away team already has enough away games
+        get_or(context.hasPlayedWithPotMap,
+               std::to_string(g.h) + ":" + awayPot + ":h",
+               false) || // Game's home team has already played
+                         // away team's pot (as home team)
+        get_or(context.hasPlayedWithPotMap,
+               std::to_string(g.a) + ":" + homePot + ":a",
+               false) || // Game's away team has already played
+                         // home team's pot (as away team)
+        get_or(context.numOpponentCountryByTeam,
+               std::to_string(g.h) + ":" + teams[g.a].country, 0) ==
+            2 || // Game's home team has faced max opps from away team's country
+        get_or(context.numOpponentCountryByTeam,
+               std::to_string(g.a) + ":" + teams[g.h].country, 0) ==
             2 // Game's away team has faced max opps from home team's country
     ) {
         return false;
@@ -164,6 +205,28 @@ bool Draw::draw(bool suppress) {
     }
 }
 
+bool Draw::draw(BS::light_thread_pool &pool) {
+    try {
+        generateAllGames();
+        while (pickedMatches.size() <
+               static_cast<size_t>(numMatchesPerTeam * numTeams / 2)) {
+            std::shuffle(allGames.begin(), allGames.end(), randomEngine);
+            Game g = pickMatch(pool);
+            updateDrawState(g);
+            gamesByTeam[g.h].push_back(g);
+            gamesByTeam[g.a].push_back(g);
+            allGames.erase(std::remove_if(allGames.begin(), allGames.end(),
+                                          [this](const Game &aG) {
+                                              return !validRemainingGame(aG);
+                                          }),
+                           allGames.end());
+        }
+        return true;
+    } catch (const TimeoutException &e) {
+        return false;
+    }
+}
+
 void Draw::updateDrawState(const Game &g, bool revert) {
     std::string homePot = std::to_string(teams[g.h].pot);
     std::string awayPot = std::to_string(teams[g.a].pot);
@@ -195,6 +258,48 @@ void Draw::updateDrawState(const Game &g, bool revert) {
         pickedMatchesTeamIndices.insert(std::to_string(g.h) + ":" +
                                         std::to_string(g.a));
         pickedMatches.push_back(g);
+    }
+}
+
+void Draw::updateDrawState(const Game &g, DFSContext &context, bool revert) {
+    std::string homePot = std::to_string(teams[g.h].pot);
+    std::string awayPot = std::to_string(teams[g.a].pot);
+    if (revert) {
+        context.numGamesByPotPair[homePot + ":" + awayPot] -= 1;
+        context.numHomeGamesByTeam[g.h] -= 1;
+        context.numAwayGamesByTeam[g.a] -= 1;
+        context.numOpponentCountryByTeam[std::to_string(g.h) + ":" +
+                                         teams[g.a].country] -= 1;
+        context.numOpponentCountryByTeam[std::to_string(g.a) + ":" +
+                                         teams[g.h].country] -= 1;
+        context
+            .hasPlayedWithPotMap[std::to_string(g.h) + ":" + awayPot + ":h"] =
+            false;
+        context
+            .hasPlayedWithPotMap[std::to_string(g.a) + ":" + homePot + ":a"] =
+            false;
+        context.pickedMatchesTeamIndices.erase(std::to_string(g.h) + ":" +
+                                               std::to_string(g.a));
+        context.pickedMatches.erase(std::remove(context.pickedMatches.begin(),
+                                                context.pickedMatches.end(), g),
+                                    context.pickedMatches.end());
+    } else {
+        context.numGamesByPotPair[homePot + ":" + awayPot] += 1;
+        context.numHomeGamesByTeam[g.h] += 1;
+        context.numAwayGamesByTeam[g.a] += 1;
+        context.numOpponentCountryByTeam[std::to_string(g.h) + ":" +
+                                         teams[g.a].country] += 1;
+        context.numOpponentCountryByTeam[std::to_string(g.a) + ":" +
+                                         teams[g.h].country] += 1;
+        context
+            .hasPlayedWithPotMap[std::to_string(g.h) + ":" + awayPot + ":h"] =
+            true;
+        context
+            .hasPlayedWithPotMap[std::to_string(g.a) + ":" + homePot + ":a"] =
+            true;
+        context.pickedMatchesTeamIndices.insert(std::to_string(g.h) + ":" +
+                                                std::to_string(g.a));
+        context.pickedMatches.push_back(g);
     }
 }
 
@@ -249,6 +354,127 @@ int Draw::pickTeamIndex(int pot) {
     return pickedTeamIndex;
 }
 
+DFSContext Draw::createDFSContext() {
+    DFSContext currentDrawState;
+    currentDrawState.pickedMatches = pickedMatches;
+    currentDrawState.numGamesByPotPair = numGamesByPotPair;
+    currentDrawState.numHomeGamesByTeam = numHomeGamesByTeam;
+    currentDrawState.numAwayGamesByTeam = numAwayGamesByTeam;
+    currentDrawState.numOpponentCountryByTeam = numOpponentCountryByTeam;
+    currentDrawState.hasPlayedWithPotMap = hasPlayedWithPotMap;
+    currentDrawState.pickedMatchesTeamIndices = pickedMatchesTeamIndices;
+    return currentDrawState;
+}
+
+Game Draw::pickMatch(BS::light_thread_pool &pool) {
+    // use same thread pool for outer simulations and inner DFS
+
+    // pick next match (does not necessarily involve picked team)
+    std::vector<Game> orderedRemainingGames(allGames);
+
+    // sort remaining games by home pot, then away pot
+    std::stable_sort(orderedRemainingGames.begin(), orderedRemainingGames.end(),
+                     [this](const Game &g1, const Game &g2) {
+                         if (teams[g1.h].pot < teams[g2.h].pot)
+                             return true;
+                         if (teams[g2.h].pot < teams[g1.h].pot)
+                             return false;
+                         return teams[g1.a].pot < teams[g2.a].pot;
+                     });
+
+    for (const Game &g : orderedRemainingGames) {
+        // within DFS, sort remaining games in different orders to find solution
+        // faster, using multiple threads if necessary
+        std::atomic<bool> stop{false};
+        std::chrono::steady_clock::time_point deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(2500);
+        std::promise<bool> result_promise;
+        std::shared_future<bool> result_future =
+            result_promise.get_future().share();
+
+        // DFS with default sort order
+        std::future<void> future =
+            pool.submit_task([this, &g, &stop, &result_promise]() {
+                DFSContext currentDrawState = createDFSContext();
+                bool result = DFS(g, allGames, currentDrawState, 0, stop);
+                bool expected = false;
+                if (stop.compare_exchange_strong(expected, true)) {
+                    result_promise.set_value(result);
+                }
+            });
+
+        // wait up to 250ms for default DFS
+        if (result_future.wait_for(std::chrono::milliseconds(250)) ==
+            std::future_status::ready) {
+            // result returned by DFS within 250ms
+            stop.store(true, std::memory_order_relaxed);
+            future.wait();
+            if (result_future.get()) {
+                return g;
+            } else {
+                continue;
+            }
+        }
+
+        // default DFS hasn't finished, launch extra workers
+        std::vector<std::future<void>> futures;
+        for (int sortMode = 1; sortMode < 3; sortMode++) {
+            futures.push_back(pool.submit_task(
+                [this, sortMode, &g, &stop, &result_promise]() {
+                    DFSContext currentDrawState = createDFSContext();
+                    bool result =
+                        DFS(g, allGames, currentDrawState, sortMode, stop);
+                    bool expected = false;
+                    if (stop.compare_exchange_strong(expected, true)) {
+                        result_promise.set_value(result);
+                    }
+                }));
+        }
+
+        // // wait until any thread finishes (no timeouts)
+        // result_future.wait();
+        // stop.store(true, std::memory_order_relaxed);
+        // monitor.join();
+        // for (auto &t : workers) {
+        //     t.join();
+        // }
+        // if (result_future.get()) {
+        //     return g;
+        // } else {
+        //     continue;
+        // }
+
+        // wait until result or deadline
+        if (result_future.wait_until(deadline) == std::future_status::ready) {
+            // result returned before timeout
+            stop.store(true, std::memory_order_relaxed);
+            future.wait();
+            for (auto &f : futures) {
+                f.wait();
+            }
+            if (result_future.get()) {
+                return g;
+            } else {
+                continue;
+            }
+        } else {
+            // timeout
+            stop.store(true, std::memory_order_relaxed);
+            future.wait();
+            for (auto &f : futures) {
+                f.wait();
+            }
+            throw TimeoutException();
+            // alternatively, continue and only throw timeout exception if no
+            // match picked - this could either lead to longer waits, or skip
+            // slow DFS's.
+        }
+    }
+
+    std::cerr << "Draw::pickMatch() error: no match picked" << std::endl;
+    exit(2);
+}
+
 Game Draw::pickMatch() {
     // pick next match (does not necessarily involve picked team)
     std::vector<Game> orderedRemainingGames(allGames);
@@ -264,27 +490,197 @@ Game Draw::pickMatch() {
                      });
 
     for (const Game &g : orderedRemainingGames) {
-        // sort remaining games in different orders to find solution faster
-        for (int sortMode = 0; sortMode < 3; sortMode++) {
-            int result =
-                DFS(g, allGames, 1, std::chrono::steady_clock::now(), sortMode);
-            if (result == 1) {
+        // within DFS, sort remaining games in different orders to find solution
+        // faster, using multiple threads if necessary
+        std::atomic<bool> stop{false};
+        std::chrono::steady_clock::time_point deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(2500);
+        std::promise<bool> result_promise;
+        std::shared_future<bool> result_future =
+            result_promise.get_future().share();
+
+        // options:
+        // (1) use thread pool for outer simulations, raw threads for inner
+        // (2) use same thread pool for outer and inner
+        // (3) use separate thread pools for outer and inner (test different
+        //     thread ratios)
+
+        // DFS with default sort order
+        std::thread monitor([this, &g, &stop, &result_promise]() {
+            DFSContext currentDrawState = createDFSContext();
+            bool result = DFS(g, allGames, currentDrawState, 0, stop);
+            bool expected = false;
+            if (stop.compare_exchange_strong(expected, true)) {
+                result_promise.set_value(result);
+            }
+        });
+
+        // wait up to 250ms for default DFS
+        if (result_future.wait_for(std::chrono::milliseconds(250)) ==
+            std::future_status::ready) {
+            // result returned by DFS within 250ms
+            stop.store(true, std::memory_order_relaxed);
+            monitor.join();
+            if (result_future.get()) {
                 return g;
-            } else if (result == 0) {
-                break;
             } else {
-                if (sortMode == 2) {
-                    throw TimeoutException();
-                }
+                continue;
+            }
+        }
+
+        // default DFS hasn't finished, launch extra workers
+        std::vector<std::thread> workers;
+        for (int sortMode = 1; sortMode < 3; sortMode++) {
+            workers.emplace_back(
+                [this, sortMode, &g, &stop, &result_promise]() {
+                    DFSContext currentDrawState = createDFSContext();
+                    bool result =
+                        DFS(g, allGames, currentDrawState, sortMode, stop);
+                    bool expected = false;
+                    if (stop.compare_exchange_strong(expected, true)) {
+                        result_promise.set_value(result);
+                    }
+                });
+        }
+
+        // // wait until any thread finishes (no timeouts)
+        // result_future.wait();
+        // stop.store(true, std::memory_order_relaxed);
+        // monitor.join();
+        // for (auto &t : workers) {
+        //     t.join();
+        // }
+        // if (result_future.get()) {
+        //     return g;
+        // } else {
+        //     continue;
+        // }
+
+        // wait until result or deadline
+        if (result_future.wait_until(deadline) == std::future_status::ready) {
+            // result returned before timeout
+            stop.store(true, std::memory_order_relaxed);
+            monitor.join();
+            for (auto &t : workers) {
+                t.join();
+            }
+            if (result_future.get()) {
+                return g;
+            } else {
+                continue;
+            }
+        } else {
+            // timeout
+            stop.store(true, std::memory_order_relaxed);
+            monitor.join();
+            for (auto &t : workers) {
+                t.join();
+            }
+            throw TimeoutException();
+            // alternatively, continue and only throw timeout exception if no
+            // match picked - this could either lead to longer waits, or skip
+            // slow DFS's.
+        }
+    }
+
+    std::cerr << "Draw::pickMatch() error: no match picked" << std::endl;
+    exit(2);
+}
+
+bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
+               DFSContext &context, int sortMode, std::atomic<bool> &stop) {
+    // g is candidate game
+    // return true if timeout, another thread finished, or g accepted
+
+    // timeout, or another thread finished:
+    if (stop.load(std::memory_order_relaxed)) {
+        return true;
+    }
+
+    // reject:
+    if (!validRemainingGame(g, context)) {
+        return false;
+    }
+
+    // accept:
+    if (context.pickedMatches.size() ==
+        static_cast<size_t>((numTeams * numMatchesPerTeam / 2) - 1)) {
+        return true;
+    }
+
+    // recursive case: g picked
+    // update state, recurse, then revert state
+    updateDrawState(g, context);
+    std::vector<Game> newRemainingGames;
+    std::copy_if(remainingGames.begin(), remainingGames.end(),
+                 std::back_inserter(newRemainingGames),
+                 [this, &context](const Game &rG) {
+                     return validRemainingGame(rG, context);
+                 });
+
+    // pick new home team by getting minimum pot pair with unallocated matches
+    // and taking incomplete home pot team whose country has most teams
+
+    // get min pot pair
+    int potPairHomePot = 0; // 1-indexed
+    int potPairAwayPot = 0; // 1-indexed
+    bool done = false;
+    for (int i = 1; i <= numPots; i++) {
+        for (int j = 1; j <= numPots; j++) {
+            if (context.numGamesByPotPair[std::to_string(i) + ":" +
+                                          std::to_string(j)] <
+                numMatchesPerPotPair) {
+                potPairHomePot = i;
+                potPairAwayPot = j;
+                done = true;
+                break;
+            }
+        }
+        if (done)
+            break;
+    }
+
+    // sort home pot's team indices by country with most teams, then take first
+    // team with missing matches against away pot (pot pairing for UECL)
+    int newHomeTeamIndex = -1;
+    std::vector<int> teamIndices(numTeamsPerPot);
+    std::iota(teamIndices.begin(), teamIndices.end(),
+              (potPairHomePot - 1) * numTeamsPerPot);
+    std::sort(teamIndices.begin(), teamIndices.end(),
+              [this](int team1, int team2) {
+                  return numTeamsByCountry[teams[team1].country] >
+                         numTeamsByCountry[teams[team2].country];
+              });
+    for (int t : teamIndices) {
+        if (DFSHomeTeamPredicate(t, potPairAwayPot, context)) {
+            newHomeTeamIndex = t;
+            break;
+        }
+    }
+
+    // stable sort remaining games to improve performance
+    std::vector<Game> candidateGames(newRemainingGames);
+    sortRemainingGames(candidateGames, sortMode);
+
+    // filter candidates to only include games involving new home team and
+    // matching away pot
+    for (const Game &cG : candidateGames) {
+        if (cG.h == newHomeTeamIndex && teams[cG.a].pot == potPairAwayPot) {
+            if (DFS(cG, newRemainingGames, context, sortMode, stop)) {
+                // accept, timeout, or another thread finished
+                // revert state and immediately return
+                updateDrawState(g, context, true);
+                return true;
             }
         }
     }
 
-    std::cout << "pickMatch error" << std::endl;
-    exit(2);
+    // no valid candidate game, so reject
+    updateDrawState(g, context, true);
+    return false;
 }
 
-int Draw::DFS(const Game &g, const std::vector<Game> &remainingGames, int depth,
+int Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
               const std::chrono::steady_clock::time_point &t0, int sortMode) {
     // g is candidate game
     // return values: 0=reject, 1=accept, 2=timeout
@@ -363,7 +759,7 @@ int Draw::DFS(const Game &g, const std::vector<Game> &remainingGames, int depth,
     // matching away pot
     for (const Game &cG : candidateGames) {
         if (cG.h == newHomeTeamIndex && teams[cG.a].pot == potPairAwayPot) {
-            int result = DFS(cG, newRemainingGames, depth + 1, t0, sortMode);
+            int result = DFS(cG, newRemainingGames, t0, sortMode);
             if (result) {
                 // accept or timeout, so revert state and immediately return
                 updateDrawState(g, true);
@@ -381,6 +777,14 @@ bool Draw::DFSHomeTeamPredicate(int homeTeamIndex, int awayPot) {
     // return true to use new home team, false to reject
     return !hasPlayedWithPotMap[std::to_string(homeTeamIndex) + ":" +
                                 std::to_string(awayPot) + ":h"];
+}
+
+bool Draw::DFSHomeTeamPredicate(int homeTeamIndex, int awayPot,
+                                const DFSContext &context) const {
+    return !get_or(context.hasPlayedWithPotMap,
+                   std::to_string(homeTeamIndex) + ":" +
+                       std::to_string(awayPot) + ":h",
+                   false);
 }
 
 void Draw::displayPots() const {
