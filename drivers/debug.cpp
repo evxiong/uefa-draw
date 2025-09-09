@@ -10,16 +10,21 @@
 
 // usage:
 // $ make DRIVER=debug
-// $ ./bin/debug <year> <ucl | uel | uecl>
+// $ ./bin/debug <year> <ucl | uel | uecl> <input txt path>
 
 int main(int argc, char **argv) {
-    if (argc != 3) {
+    if (argc < 3) {
         std::cerr << "Usage: ./bin/debug <year> <competition>" << std::endl;
         exit(1);
     }
 
+    std::string inputMatchesPath = "";
     const int year = std::stoi(argv[1]);
     const std::string competition = argv[2];
+
+    if (argc >= 4) {
+        inputMatchesPath = argv[3];
+    }
 
     if (year <= 0) {
         std::cerr << "Invalid year: must be > 0" << std::endl;
@@ -32,16 +37,16 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    const std::string input_file =
+    const std::string inputTeamsPath =
         "data/" + std::to_string(year) + "/teams/" + competition + ".csv";
 
     std::unique_ptr<Draw> d;
     if (competition == "ucl")
-        d.reset(new UCLDraw(input_file));
+        d.reset(new UCLDraw(inputTeamsPath, inputMatchesPath));
     else if (competition == "uel")
-        d.reset(new UELDraw(input_file));
+        d.reset(new UELDraw(inputTeamsPath, inputMatchesPath));
     else if (competition == "uecl")
-        d.reset(new UECLDraw(input_file));
+        d.reset(new UECLDraw(inputTeamsPath, inputMatchesPath));
     else {
         std::cerr << "Invalid competition type: must be 'ucl', 'uel', or 'uecl'"
                   << std::endl;

@@ -8,12 +8,13 @@
 
 // Terminal colors
 #define RESET "\033[0m"
-#define RED "\033[91m"     /* Red */
-#define BLUE "\033[94m"    /* Blue */
-#define GREEN "\033[92m"   /* Green */
-#define YELLOW "\033[93m"  /* Yellow */
-#define CYAN "\033[96m"    /* Cyan */
-#define MAGENTA "\033[95m" /* Magenta */
+#define GRAY "\033[90m"
+#define RED "\033[91m"
+#define BLUE "\033[94m"
+#define GREEN "\033[92m"
+#define YELLOW "\033[93m"
+#define CYAN "\033[96m"
+#define MAGENTA "\033[95m"
 
 extern const std::string POT_COLORS[];
 
@@ -64,6 +65,22 @@ struct DFSContext {
         hasPlayedWithPotMap; // {team ind}:{opp pot}:{h/a dep. on team ind}
     std::unordered_set<std::string>
         pickedMatchesTeamIndices; // {home team ind}:{away team ind}
+    std::vector<std::unordered_set<int>>
+        needsHomeAgainstPot; // pot ind (0-based) -> set of team inds
+                             // with unscheduled home games against
+                             // this pot
+    std::vector<std::unordered_set<int>>
+        needsAwayAgainstPot; // pot ind (0-based) -> set of team inds
+                             // with unscheduled away games against
+                             // this pot
+    std::unordered_map<std::string,
+                       int>
+        countryHomeNeeds; // {country}:{pot} -> global count of country's teams
+                          // that need home game against pot
+    std::unordered_map<std::string,
+                       int>
+        countryAwayNeeds; // {country}:{pot} -> global count of country's teams
+                          // that need away game against pot
 };
 
 #endif // GLOBALS_H

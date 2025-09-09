@@ -41,8 +41,10 @@ void Simulator::run(int iterations) {
 
     std::cout << "Simulating " << iterations << " draws..." << std::endl;
 
-    const int numThreads = std::thread::hardware_concurrency();
+    // const int numThreads = std::thread::hardware_concurrency() / 2;
+    const int numThreads = 16;
     BS::thread_pool pool(numThreads);
+    BS::thread_pool dfsPool(32);
 
     // each thread keeps its own counts
     std::vector<std::unordered_map<std::string, int>> threadCounts(numThreads);
@@ -60,7 +62,7 @@ void Simulator::run(int iterations) {
     auto tStart = std::chrono::steady_clock::now();
 
     for (int i = 0; i < iterations; i++) {
-        pool.detach_task([this, i, &pool, &indexByThreadId, &threadCounts,
+        pool.detach_task([this, &dfsPool, &indexByThreadId, &threadCounts,
                           &duration, &completed, &failures] {
             auto t0 = std::chrono::steady_clock::now();
             bool success = false;
@@ -76,7 +78,7 @@ void Simulator::run(int iterations) {
                     std::cout << "Invalid competition specified" << std::endl;
                     exit(1);
                 }
-                d->draw();
+                d->draw(dfsPool);
                 success = d->verifyDraw();
                 if (!success) {
                     // update failures

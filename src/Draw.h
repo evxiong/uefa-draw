@@ -14,17 +14,17 @@ class Draw {
   public:
     bool draw(bool suppress = true); // returns false if timeout
     bool draw(BS::light_thread_pool &pool);
-    void displayPots() const;
+    void displayPots(bool showCountries = false) const;
     const std::vector<Game> &getSchedule() const;
     bool verifyDraw(bool suppress = true) const;
 
   protected:
     Draw(const std::vector<Team> &t, int pots, int teamsPerPot,
          int matchesPerTeam, int matchesPerPotPair);
-    Draw(std::string input_path, int pots, int teamsPerPot, int matchesPerTeam,
-         int matchesPerPotPair); // input_path: path to teams csv
+    Draw(std::string inputTeamsPath, std::string inputMatchesPath, int pots,
+         int teamsPerPot, int matchesPerTeam, int matchesPerPotPair);
 
-    void generateAllGames();
+    void initializeState();
     void sortRemainingGames(std::vector<Game> &remainingGames, int sortMode);
     int pickTeamIndex(int pot);
     void updateDrawState(const Game &g, bool revert = false);
@@ -77,23 +77,40 @@ class Draw {
     std::unordered_set<std::string>
         pickedMatchesTeamIndices;             // {home team ind}:{away team ind}
     std::unordered_set<int> drawnTeamIndices; // team inds drawn so far
+
+    std::vector<std::unordered_set<int>>
+        needsHomeAgainstPot; // pot ind -> set of team inds with
+                             // unscheduled home games against this pot
+    std::vector<std::unordered_set<int>>
+        needsAwayAgainstPot; // pot ind -> set of team inds with
+                             // unscheduled away games against this pot
+    std::unordered_map<std::string,
+                       int>
+        countryHomeNeeds; // {country}:{pot} -> global count of country's teams
+                          // that need home game against pot
+    std::unordered_map<std::string,
+                       int>
+        countryAwayNeeds; // {country}:{pot} -> global count of country's teams
+                          // that need away game against pot
 };
 
 class UCLDraw : public Draw {
   public:
-    UCLDraw(std::string input_path) : Draw(input_path, 4, 9, 8, 9) {}
+    UCLDraw(std::string inputTeamsPath, std::string inputMatchesPath)
+        : Draw(inputTeamsPath, inputMatchesPath, 4, 9, 8, 9) {}
     UCLDraw(const std::vector<Team> &t) : Draw(t, 4, 9, 8, 9) {}
 };
 
 class UELDraw : public Draw {
   public:
-    UELDraw(std::string input_path) : Draw(input_path, 4, 9, 8, 9) {}
+    UELDraw(std::string inputTeamsPath, std::string inputMatchesPath)
+        : Draw(inputTeamsPath, inputMatchesPath, 4, 9, 8, 9) {}
     UELDraw(const std::vector<Team> &t) : Draw(t, 4, 9, 8, 9) {}
 };
 
 class UECLDraw : public Draw {
   public:
-    UECLDraw(std::string input_path);
+    UECLDraw(std::string inputTeamsPath, std::string inputMatchesPath);
     UECLDraw(const std::vector<Team> &t);
 
   protected:

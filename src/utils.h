@@ -7,6 +7,10 @@
 #include <vector>
 
 std::vector<Team> readCSVTeams(std::string input_file);
+std::vector<Game> readTXTGames(std::string input_file,
+                               const std::vector<Team> &teams);
+std::string trim(const std::string &s);
+std::string toLower(const std::string &s);
 
 // Get `key`'s value from map; return `default_value` if `key` not found
 template <typename Map, typename Key,

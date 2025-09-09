@@ -7,7 +7,8 @@
 #include <string>
 #include <vector>
 
-UECLDraw::UECLDraw(std::string input_path) : Draw(input_path, 6, 6, 6, 3) {}
+UECLDraw::UECLDraw(std::string inputTeamsPath, std::string inputMatchesPath)
+    : Draw(inputTeamsPath, inputMatchesPath, 6, 6, 6, 3) {}
 
 UECLDraw::UECLDraw(const std::vector<Team> &t) : Draw(t, 6, 6, 6, 3) {}
 

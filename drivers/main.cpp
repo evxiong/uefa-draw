@@ -11,10 +11,6 @@
 //   <output csv path>
 
 int main(int argc, char **argv) {
-    int iterations = 1;
-    std::string input = "";
-    std::string output = "";
-
     if (argc > 5) {
         std::cerr << "Too many arguments" << std::endl;
         exit(1);
@@ -23,6 +19,9 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    int iterations = 1;
+    std::string input = "";
+    std::string output = "";
     int year = std::stoi(argv[1]);
     std::string competition = argv[2];
 

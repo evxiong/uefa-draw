@@ -21,27 +21,53 @@ Draw::Draw(const std::vector<Team> &t, int pots, int teamsPerPot,
       numMatchesPerTeam(matchesPerTeam), numTeams(numPots * numTeamsPerPot),
       numMatchesPerPotPair(matchesPerPotPair), teams(t),
       randomEngine(std::random_device{}()) {
-    for (const Team &team : teams) {
-        numTeamsByCountry[team.country] += 1;
-    }
+    initializeState();
 }
 
-Draw::Draw(std::string input_path, int pots, int teamsPerPot,
-           int matchesPerTeam, int matchesPerPotPair)
+Draw::Draw(std::string inputTeamsPath, std::string inputMatchesPath, int pots,
+           int teamsPerPot, int matchesPerTeam, int matchesPerPotPair)
     : numPots(pots), numTeamsPerPot(teamsPerPot),
       numMatchesPerTeam(matchesPerTeam), numTeams(numPots * numTeamsPerPot),
-      numMatchesPerPotPair(matchesPerPotPair), teams(readCSVTeams(input_path)),
+      numMatchesPerPotPair(matchesPerPotPair),
+      teams(readCSVTeams(inputTeamsPath)),
       randomEngine(std::random_device{}()) {
-    for (const Team &team : teams) {
-        numTeamsByCountry[team.country] += 1;
+    initializeState();
+
+    if (inputMatchesPath != "") {
+        // initialize state with input matches
+        std::vector<Game> initialGames = readTXTGames(inputMatchesPath, teams);
+        for (const Game &g : initialGames) {
+            updateDrawState(g);
+            std::cout << GRAY << teams[g.h].abbrev << "-" << teams[g.a].abbrev
+                      << " " << teams[g.h].pot << "-" << teams[g.a].pot << RESET
+                      << std::endl;
+            gamesByTeam[g.h].push_back(g);
+            gamesByTeam[g.a].push_back(g);
+            allGames.erase(std::remove_if(allGames.begin(), allGames.end(),
+                                          [this](const Game &aG) {
+                                              return !validRemainingGame(aG);
+                                          }),
+                           allGames.end());
+        }
     }
 }
 
-const std::vector<Game> &Draw::getSchedule() const {
-    return pickedMatches;
-}
-
-void Draw::generateAllGames() {
+void Draw::initializeState() {
+    for (const Team &team : teams) {
+        numTeamsByCountry[team.country] += 1;
+    }
+    for (int potInd = 0; potInd < numPots; potInd++) {
+        needsHomeAgainstPot.push_back(std::unordered_set<int>());
+        needsAwayAgainstPot.push_back(std::unordered_set<int>());
+        for (int teamInd = 0; teamInd < numTeams; teamInd++) {
+            needsHomeAgainstPot[potInd].insert(teamInd);
+            needsAwayAgainstPot[potInd].insert(teamInd);
+            countryHomeNeeds[teams[teamInd].country + ":" +
+                             std::to_string(potInd + 1)] += 1;
+            countryAwayNeeds[teams[teamInd].country + ":" +
+                             std::to_string(potInd + 1)] += 1;
+        }
+    }
     // create all possible matchups (home vs away status matters)
     // games must be contested btwn two teams of diff countries
     // max of numTeams * numMatchesPerTeam
@@ -53,6 +79,10 @@ void Draw::generateAllGames() {
             }
         }
     }
+}
+
+const std::vector<Game> &Draw::getSchedule() const {
+    return pickedMatches;
 }
 
 bool Draw::validRemainingGame(const Game &g) {
@@ -95,7 +125,9 @@ bool Draw::validRemainingGame(const Game &g, const DFSContext &context) {
     // kept), false if invalid (should be removed)
     std::string homePot = std::to_string(teams[g.h].pot);
     std::string awayPot = std::to_string(teams[g.a].pot);
-    if (context.pickedMatchesTeamIndices.count(
+    if (teams[g.h].country ==
+            teams[g.a].country || // home and away team from same country
+        context.pickedMatchesTeamIndices.count(
             std::to_string(g.h) + ":" +
             std::to_string(g.a)) || // Game already picked
         context.pickedMatchesTeamIndices.count(
@@ -129,8 +161,6 @@ bool Draw::validRemainingGame(const Game &g, const DFSContext &context) {
 
 bool Draw::draw(bool suppress) {
     try {
-        generateAllGames();
-
         for (int pot = 1; pot <= numPots; pot++) {
             for (int i = 0; i < numTeamsPerPot; i++) {
                 // choose a team in the current pot
@@ -172,6 +202,10 @@ bool Draw::draw(bool suppress) {
                                  randomEngine);
                     Game g = pickMatch();
                     updateDrawState(g);
+                    std::cout << GRAY << teams[g.h].abbrev << "-"
+                              << teams[g.a].abbrev << RESET << std::endl;
+                    // if (pickedMatches.size() >= 2)
+                    //     exit(2);
                     gamesByTeam[g.h].push_back(g);
                     gamesByTeam[g.a].push_back(g);
                     allGames.erase(
@@ -200,6 +234,7 @@ bool Draw::draw(bool suppress) {
     } catch (const TimeoutException &e) {
         if (!suppress) {
             std::cout << RED << e.what() << RESET << std::endl;
+            displayPots(true);
         }
         return false;
     }
@@ -207,7 +242,6 @@ bool Draw::draw(bool suppress) {
 
 bool Draw::draw(BS::light_thread_pool &pool) {
     try {
-        generateAllGames();
         while (pickedMatches.size() <
                static_cast<size_t>(numMatchesPerTeam * numTeams / 2)) {
             std::shuffle(allGames.begin(), allGames.end(), randomEngine);
@@ -245,6 +279,10 @@ void Draw::updateDrawState(const Game &g, bool revert) {
         pickedMatches.erase(
             std::remove(pickedMatches.begin(), pickedMatches.end(), g),
             pickedMatches.end());
+        needsHomeAgainstPot[teams[g.a].pot - 1].insert(g.h);
+        needsAwayAgainstPot[teams[g.h].pot - 1].insert(g.a);
+        countryHomeNeeds[teams[g.h].country + ":" + awayPot] += 1;
+        countryAwayNeeds[teams[g.a].country + ":" + homePot] += 1;
     } else {
         numGamesByPotPair[homePot + ":" + awayPot] += 1;
         numHomeGamesByTeam[g.h] += 1;
@@ -258,6 +296,10 @@ void Draw::updateDrawState(const Game &g, bool revert) {
         pickedMatchesTeamIndices.insert(std::to_string(g.h) + ":" +
                                         std::to_string(g.a));
         pickedMatches.push_back(g);
+        needsHomeAgainstPot[teams[g.a].pot - 1].erase(g.h);
+        needsAwayAgainstPot[teams[g.h].pot - 1].erase(g.a);
+        countryHomeNeeds[teams[g.h].country + ":" + awayPot] -= 1;
+        countryAwayNeeds[teams[g.a].country + ":" + homePot] -= 1;
     }
 }
 
@@ -283,6 +325,10 @@ void Draw::updateDrawState(const Game &g, DFSContext &context, bool revert) {
         context.pickedMatches.erase(std::remove(context.pickedMatches.begin(),
                                                 context.pickedMatches.end(), g),
                                     context.pickedMatches.end());
+        context.needsHomeAgainstPot[teams[g.a].pot - 1].insert(g.h);
+        context.needsAwayAgainstPot[teams[g.h].pot - 1].insert(g.a);
+        context.countryHomeNeeds[teams[g.h].country + ":" + awayPot] += 1;
+        context.countryAwayNeeds[teams[g.a].country + ":" + homePot] += 1;
     } else {
         context.numGamesByPotPair[homePot + ":" + awayPot] += 1;
         context.numHomeGamesByTeam[g.h] += 1;
@@ -300,6 +346,10 @@ void Draw::updateDrawState(const Game &g, DFSContext &context, bool revert) {
         context.pickedMatchesTeamIndices.insert(std::to_string(g.h) + ":" +
                                                 std::to_string(g.a));
         context.pickedMatches.push_back(g);
+        context.needsHomeAgainstPot[teams[g.a].pot - 1].erase(g.h);
+        context.needsAwayAgainstPot[teams[g.h].pot - 1].erase(g.a);
+        context.countryHomeNeeds[teams[g.h].country + ":" + awayPot] -= 1;
+        context.countryAwayNeeds[teams[g.a].country + ":" + homePot] -= 1;
     }
 }
 
@@ -333,7 +383,7 @@ void Draw::sortRemainingGames(std::vector<Game> &remainingGames, int sortMode) {
                          int remainingMatches2 = numMatchesPerTeam -
                                                  numHomeGamesByTeam[g2.a] -
                                                  numAwayGamesByTeam[g2.a];
-                         return remainingMatches1 > remainingMatches2;
+                         return remainingMatches1 < remainingMatches2;
                      });
 }
 
@@ -363,11 +413,15 @@ DFSContext Draw::createDFSContext() {
     currentDrawState.numOpponentCountryByTeam = numOpponentCountryByTeam;
     currentDrawState.hasPlayedWithPotMap = hasPlayedWithPotMap;
     currentDrawState.pickedMatchesTeamIndices = pickedMatchesTeamIndices;
+    currentDrawState.needsHomeAgainstPot = needsHomeAgainstPot;
+    currentDrawState.needsAwayAgainstPot = needsAwayAgainstPot;
+    currentDrawState.countryHomeNeeds = countryHomeNeeds;
+    currentDrawState.countryAwayNeeds = countryAwayNeeds;
     return currentDrawState;
 }
 
 Game Draw::pickMatch(BS::light_thread_pool &pool) {
-    // use same thread pool for outer simulations and inner DFS
+    // use separate thread pools for outer simulations and inner DFS
 
     // pick next match (does not necessarily involve picked team)
     std::vector<Game> orderedRemainingGames(allGames);
@@ -434,9 +488,9 @@ Game Draw::pickMatch(BS::light_thread_pool &pool) {
         // // wait until any thread finishes (no timeouts)
         // result_future.wait();
         // stop.store(true, std::memory_order_relaxed);
-        // monitor.join();
-        // for (auto &t : workers) {
-        //     t.join();
+        // future.wait();
+        // for (auto &f : futures) {
+        //     f.wait();
         // }
         // if (result_future.get()) {
         //     return g;
@@ -464,13 +518,22 @@ Game Draw::pickMatch(BS::light_thread_pool &pool) {
             for (auto &f : futures) {
                 f.wait();
             }
+            std::string output = "";
+            for (const Game &pG : pickedMatches) {
+                output +=
+                    std::to_string(pG.h) + "-" + std::to_string(pG.a) + ",";
+            }
+            output += std::to_string(g.h) + "-" + std::to_string(g.a);
+            std::cout << output << std::endl;
             throw TimeoutException();
-            // alternatively, continue and only throw timeout exception if no
+            // continue;
+            // continue and only throw timeout exception if no
             // match picked - this could either lead to longer waits, or skip
             // slow DFS's.
         }
     }
 
+    // throw TimeoutException();
     std::cerr << "Draw::pickMatch() error: no match picked" << std::endl;
     exit(2);
 }
@@ -501,13 +564,16 @@ Game Draw::pickMatch() {
 
         // options:
         // (1) use thread pool for outer simulations, raw threads for inner
-        // (2) use same thread pool for outer and inner
-        // (3) use separate thread pools for outer and inner (test different
+        // (2) use separate thread pools for outer and inner (test different
         //     thread ratios)
 
         // DFS with default sort order
         std::thread monitor([this, &g, &stop, &result_promise]() {
             DFSContext currentDrawState = createDFSContext();
+            // std::cout << "\t" << teams[g.h].abbrev << "-" <<
+            // teams[g.a].abbrev
+            //           << " " << teams[g.h].pot << "-" << teams[g.a].pot
+            //           << std::endl;
             bool result = DFS(g, allGames, currentDrawState, 0, stop);
             bool expected = false;
             if (stop.compare_exchange_strong(expected, true)) {
@@ -597,20 +663,191 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
         return true;
     }
 
+    // std::cout << "\t\t" << teams[g.h].abbrev << "-" << teams[g.a].abbrev << "
+    // "
+    //           << teams[g.h].pot << "-" << teams[g.a].pot << std::endl;
+
     // reject:
     if (!validRemainingGame(g, context)) {
         return false;
     }
 
+    // update draw state, then perform checks; if any check fails, revert state
+    // and return false.
+    updateDrawState(g, context);
+
     // accept:
+    // if (context.pickedMatches.size() ==
+    //     static_cast<size_t>((numTeams * numMatchesPerTeam / 2) - 1)) {
+    //     return true;
+    // }
     if (context.pickedMatches.size() ==
-        static_cast<size_t>((numTeams * numMatchesPerTeam / 2) - 1)) {
+        static_cast<size_t>(numTeams * numMatchesPerTeam / 2)) {
         return true;
     }
 
+    // checks:
+
+    // std::cout << "Game under consideration: " << teams[g.h].abbrev << "-"
+    //           << teams[g.a].abbrev << " " << teams[g.h].pot << "-"
+    //           << teams[g.a].pot << std::endl;
+
+    // - each team needing away game against g.h pot must have >= 1 valid
+    //   matchup left; otherwise, return false
+    // - among teams needing away game against g.h pot: for each represented
+    //   country, if total team count (countryAwayNeeds) > number of away slots
+    //   for pot, reject
+    //     - # away slots = sum for each team in g.h pot: count # of teams in
+    //       country that have valid Game(g.h team, country team), capped at (2
+    //       - number of times g.h team has already played this country) per g.h
+    //       team
+    std::unordered_map<std::string, std::unordered_map<int, int>>
+        awaySlots; // {country} -> {homeTeamInd} -> number of away slots
+                   // provided by this home team for this country (capped)
+    // std::cout << "teams needing away game against g.h pot: "
+    //           << context.needsAwayAgainstPot[teams[g.h].pot - 1].size()
+    //           << std::endl;
+    for (int teamInd : context.needsAwayAgainstPot[teams[g.h].pot - 1]) {
+        // std::cout << " " << teams[teamInd].abbrev << "/" <<
+        // teams[teamInd].pot
+        //           << "-" << teams[teamInd].country << std::endl;
+        bool validMatchup = false;
+        for (int i = 0; i < numTeamsPerPot; i++) {
+            int homeTeamInd = (teams[g.h].pot - 1) * numTeamsPerPot + i;
+            if (validRemainingGame(Game(homeTeamInd, teamInd), context)) {
+                validMatchup = true;
+
+                std::string country = teams[teamInd].country;
+                // maxAwaySlots constrains number of slots provided by a single
+                // home team
+                int maxAwaySlots =
+                    2 -
+                    context
+                        .numOpponentCountryByTeam[std::to_string(homeTeamInd) +
+                                                  ":" + country];
+                awaySlots[country][homeTeamInd] =
+                    std::min(maxAwaySlots, awaySlots[country][homeTeamInd] + 1);
+            }
+        }
+        if (!validMatchup) {
+            // std::cout << "\t\t" << teams[g.h].abbrev << "-" <<
+            // teams[g.a].abbrev
+            //           << " " << teams[g.h].pot << "-" << teams[g.a].pot
+            //           << std::endl;
+            // std::cout << "\t\t\t" << teams[teamInd].abbrev
+            //           << " missing valid away game matchup" << std::endl;
+            updateDrawState(g, context, true);
+            return false;
+        }
+    }
+    // iterate over all countries, check needed slots against total number
+    // of available away slots
+    // std::cout << "away slots" << std::endl;
+    for (const auto &p1 : awaySlots) {
+        std::string country = p1.first;
+        std::unordered_map<int, int> slots = p1.second;
+        int countryAvailableSlots = 0;
+        for (const auto &p2 : slots) {
+            countryAvailableSlots += p2.second;
+        }
+
+        if (context.countryAwayNeeds[country + ":" +
+                                     std::to_string(teams[g.h].pot)] >
+            countryAvailableSlots) {
+            std::cout << "Game under consideration: " << teams[g.h].abbrev
+                      << "-" << teams[g.a].abbrev << " " << teams[g.h].pot
+                      << "-" << teams[g.a].pot << std::endl;
+            std::cout
+                << " " << country << " "
+                << context.countryAwayNeeds[country + ":" +
+                                            std::to_string(teams[g.h].pot)]
+                << " vs. away slots " << countryAvailableSlots << std::endl;
+            // updateDrawState(g, context, true);
+            // return false;
+        }
+    }
+
+    // - each team needing home game against g.a pot must have >= 1 valid
+    //   matchup left; otherwise, return false
+    // - among teams needing home game against g.a pot: for each represented
+    //   country, if total team count (countryHomeTeams) > # of home slots for
+    //   pot, reject
+    //     - # home slots = sum for each team in g.a pot: count # of teams in
+    //       country that have valid Game(country team, g.a team), capped at (2
+    //       - number of times g.a team has already played this country) per g.a
+    //       team
+    std::unordered_map<std::string, std::unordered_map<int, int>>
+        homeSlots; // {country} -> {awayTeamInd} -> number of home slots
+                   // provided by this away team for this country (capped)
+    // std::cout << "teams needing home game against g.a pot: "
+    //           << context.needsHomeAgainstPot[teams[g.a].pot - 1].size()
+    //           << std::endl;
+    for (int teamInd : context.needsHomeAgainstPot[teams[g.a].pot - 1]) {
+        // std::cout << " " << teams[teamInd].abbrev << "/" <<
+        // teams[teamInd].pot
+        //           << "-" << teams[teamInd].country << std::endl;
+        bool validMatchup = false;
+        for (int i = 0; i < numTeamsPerPot; i++) {
+            int awayTeamInd = (teams[g.a].pot - 1) * numTeamsPerPot + i;
+            if (validRemainingGame(Game(teamInd, awayTeamInd), context)) {
+                validMatchup = true;
+
+                std::string country = teams[teamInd].country;
+                // maxHomeSlots constrains number of slots provided by a single
+                // home team
+                int maxHomeSlots =
+                    2 -
+                    context
+                        .numOpponentCountryByTeam[std::to_string(awayTeamInd) +
+                                                  ":" + country];
+                homeSlots[country][awayTeamInd] =
+                    std::min(maxHomeSlots, homeSlots[country][awayTeamInd] + 1);
+            }
+        }
+        if (!validMatchup) {
+            // std::cout << "\t\t" << teams[g.h].abbrev << "-" <<
+            // teams[g.a].abbrev
+            //           << " " << teams[g.h].pot << "-" << teams[g.a].pot
+            //           << std::endl;
+            // std::cout << "\t\t\t" << teams[teamInd].abbrev
+            //           << " missing valid home game matchup" << std::endl;
+            updateDrawState(g, context, true);
+            return false;
+        }
+    }
+    // iterate over all countries, check needed slots against total number
+    // of available home slots
+    // std::cout << "home slots" << std::endl;
+    for (const auto &p1 : homeSlots) {
+        std::string country = p1.first;
+        std::unordered_map<int, int> slots = p1.second;
+        int countryAvailableSlots = 0;
+        for (const auto &p2 : slots) {
+            countryAvailableSlots += p2.second;
+        }
+
+        if (context.countryHomeNeeds[country + ":" +
+                                     std::to_string(teams[g.a].pot)] >
+            countryAvailableSlots) {
+            std::cout << "Game under consideration: " << teams[g.h].abbrev
+                      << "-" << teams[g.a].abbrev << " " << teams[g.h].pot
+                      << "-" << teams[g.a].pot << std::endl;
+            std::cout
+                << " " << country << " "
+                << context.countryHomeNeeds[country + ":" +
+                                            std::to_string(teams[g.a].pot)]
+                << " vs. home slots " << countryAvailableSlots << std::endl;
+            // updateDrawState(g, context, true);
+            // return false;
+        }
+    }
+
+    // std::cout << std::endl;
+    // return true; // FOR TESTING PURPOSES ONLY.
+
     // recursive case: g picked
     // update state, recurse, then revert state
-    updateDrawState(g, context);
+    // updateDrawState(g, context);
     std::vector<Game> newRemainingGames;
     std::copy_if(remainingGames.begin(), remainingGames.end(),
                  std::back_inserter(newRemainingGames),
@@ -677,6 +914,7 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
 
     // no valid candidate game, so reject
     updateDrawState(g, context, true);
+    // std::cout << "\t\t\treject" << std::endl;
     return false;
 }
 
@@ -787,14 +1025,19 @@ bool Draw::DFSHomeTeamPredicate(int homeTeamIndex, int awayPot,
                    false);
 }
 
-void Draw::displayPots() const {
+void Draw::displayPots(bool showCountries) const {
     std::cout << "Matches: " << pickedMatches.size() << std::endl << std::endl;
 
     for (int i = 0; i < numPots; i++) {
         std::cout << POT_COLORS[i] << "Pot " << i + 1 << RESET << std::endl;
         for (int j = 0; j < numTeamsPerPot; j++) {
             int teamInd = i * numTeamsPerPot + j;
-            std::cout << teams[teamInd].abbrev << "\t";
+            std::cout << teams[teamInd].abbrev;
+            if (showCountries) {
+                std::cout << GRAY << "(" << toLower(teams[teamInd].country)
+                          << ")" << RESET;
+            }
+            std::cout << "\t";
             std::vector<Game> teamGames = gamesByTeam.at(teamInd);
             std::stable_sort(teamGames.begin(), teamGames.end(),
                              [this, teamInd](const Game &g1, const Game &g2) {
@@ -803,13 +1046,21 @@ void Draw::displayPots() const {
                                  int oppInd2 = (g2.h == teamInd) ? g2.a : g2.h;
                                  return teams[oppInd1].pot < teams[oppInd2].pot;
                              });
-            for (int k = 0; k < numMatchesPerTeam; k++) {
+            for (size_t k = 0; k < teamGames.size(); k++) {
                 Game g = teamGames[k];
                 int oppInd = (g.h == teamInd) ? g.a : g.h;
                 std::cout << POT_COLORS[teams[oppInd].pot - 1]
-                          << teams[oppInd].abbrev << RESET
-                          << ((g.h == teamInd) ? "h" : "a");
-                if (k < numMatchesPerTeam - 1) {
+                          << teams[oppInd].abbrev << RESET;
+                if (showCountries) {
+                    std::cout
+                        << GRAY << "(" << toLower(teams[oppInd].country) << "."
+                        << numOpponentCountryByTeam.at(std::to_string(teamInd) +
+                                                       ":" +
+                                                       teams[oppInd].country)
+                        << ")" << RESET;
+                }
+                std::cout << ((g.h == teamInd) ? "h" : "a");
+                if (k < teamGames.size() - 1) {
                     std::cout << ",";
                 }
             }
