@@ -26,6 +26,8 @@ class Draw {
 
     void initializeState();
     void sortRemainingGames(std::vector<Game> &remainingGames, int sortMode);
+    void sortRemainingGames(std::vector<Game> &remainingGames,
+                            const DFSContext &context, int sortMode);
     int pickTeamIndex(int pot);
     void updateDrawState(const Game &g, bool revert = false);
     int DFS(const Game &g, const std::vector<Game> &remainingGames,
@@ -60,6 +62,8 @@ class Draw {
     std::mt19937 randomEngine;
     std::unordered_map<std::string, int>
         numTeamsByCountry; // country -> # teams
+    std::unordered_map<std::string, std::vector<int>>
+        teamIndsByCountry; // country -> team inds
 
     // current draw state
     std::vector<Game> allGames;      // remaining potential Games
