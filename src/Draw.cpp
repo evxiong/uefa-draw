@@ -497,87 +497,106 @@ Game Draw::pickMatch(BS::light_thread_pool &pool) {
                      });
 
     for (const Game &g : orderedRemainingGames) {
-        // within DFS, sort remaining games in different orders to find solution
-        // faster, using multiple threads if necessary
-        std::atomic<bool> stop{false};
-        std::chrono::steady_clock::time_point deadline =
-            std::chrono::steady_clock::now() + std::chrono::milliseconds(2500);
-        std::promise<bool> result_promise;
-        std::shared_future<bool> result_future =
-            result_promise.get_future().share();
-
-        // DFS with default sort order
-        std::future<void> future =
-            pool.submit_task([this, &g, &stop, &result_promise]() {
-                DFSContext currentDrawState = createDFSContext();
-                bool result = DFS(g, allGames, currentDrawState, 0, stop);
-                bool expected = false;
-                if (stop.compare_exchange_strong(expected, true)) {
-                    result_promise.set_value(result);
-                }
-            });
-
-        // wait up to 250ms for default DFS
-        if (result_future.wait_for(std::chrono::milliseconds(250)) ==
-            std::future_status::ready) {
-            // result returned by DFS within 250ms
-            stop.store(true, std::memory_order_relaxed);
-            future.wait();
-            if (result_future.get()) {
+        // perform "weak" checking first (each team needing away/home game
+        // against g.h/g.a pot must have >= 1 valid matchup left), which should
+        // be ok >80% of the time; if this leads to timeout, repeat with
+        // "strong" checking (global country checks); if still timeout, dump
+        // picked match state to locked output folder `/failures/YYYY-MM-DD
+        // HH:MM:SS.T/1.txt`
+        try {
+            if (testCandidateGame(g, pool, false)) {
                 return g;
-            } else {
-                continue;
+            }
+        } catch (const TimeoutException &e) {
+            if (testCandidateGame(g, pool, true)) {
+                return g;
             }
         }
+    }
 
-        // default DFS hasn't finished, launch extra workers
-        std::vector<std::future<void>> futures;
-        for (int sortMode = 1; sortMode < 3; sortMode++) {
-            futures.push_back(pool.submit_task(
-                [this, sortMode, &g, &stop, &result_promise]() {
-                    DFSContext currentDrawState = createDFSContext();
-                    bool result =
-                        DFS(g, allGames, currentDrawState, sortMode, stop);
-                    bool expected = false;
-                    if (stop.compare_exchange_strong(expected, true)) {
-                        result_promise.set_value(result);
-                    }
-                }));
+    std::cerr << "Draw::pickMatch() error: no match picked" << std::endl;
+    exit(2);
+}
+
+bool Draw::testCandidateGame(const Game &g, BS::light_thread_pool &pool,
+                             bool strongCheck) {
+    // g is candidate game
+    // return true if valid game, false if invalid, throw TimeoutException if
+    // timeout
+    std::atomic<bool> stop{false};
+    std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(2500);
+    std::promise<bool> result_promise;
+    std::shared_future<bool> result_future =
+        result_promise.get_future().share();
+
+    // DFS with default sort order
+    std::future<void> future =
+        pool.submit_task([this, &g, &stop, &result_promise, &strongCheck]() {
+            DFSContext currentDrawState = createDFSContext();
+            bool result =
+                DFS(g, allGames, currentDrawState, 0, strongCheck, stop);
+            bool expected = false;
+            if (stop.compare_exchange_strong(expected, true)) {
+                result_promise.set_value(result);
+            }
+        });
+
+    // wait up to 250ms for default DFS
+    if (result_future.wait_for(std::chrono::milliseconds(250)) ==
+        std::future_status::ready) {
+        // result returned by DFS within 250ms
+        stop.store(true, std::memory_order_relaxed);
+        future.wait();
+        return result_future.get();
+    }
+
+    // default DFS hasn't finished, launch extra workers with different sort
+    // orders
+    std::vector<std::future<void>> futures;
+    for (int sortMode = 1; sortMode < 3; sortMode++) {
+        futures.push_back(pool.submit_task([this, sortMode, &g, &stop,
+                                            &result_promise, &strongCheck]() {
+            DFSContext currentDrawState = createDFSContext();
+            bool result =
+                DFS(g, allGames, currentDrawState, sortMode, strongCheck, stop);
+            bool expected = false;
+            if (stop.compare_exchange_strong(expected, true)) {
+                result_promise.set_value(result);
+            }
+        }));
+    }
+
+    // // wait until any thread finishes (no timeouts)
+    // result_future.wait();
+    // stop.store(true, std::memory_order_relaxed);
+    // future.wait();
+    // for (auto &f : futures) {
+    //     f.wait();
+    // }
+    // if (result_future.get()) {
+    //     return g;
+    // } else {
+    //     continue;
+    // }
+
+    // wait until result or deadline
+    if (result_future.wait_until(deadline) == std::future_status::ready) {
+        // result returned before timeout
+        stop.store(true, std::memory_order_relaxed);
+        future.wait();
+        for (auto &f : futures) {
+            f.wait();
         }
-
-        // // wait until any thread finishes (no timeouts)
-        // result_future.wait();
-        // stop.store(true, std::memory_order_relaxed);
-        // future.wait();
-        // for (auto &f : futures) {
-        //     f.wait();
-        // }
-        // if (result_future.get()) {
-        //     return g;
-        // } else {
-        //     continue;
-        // }
-
-        // wait until result or deadline
-        if (result_future.wait_until(deadline) == std::future_status::ready) {
-            // result returned before timeout
-            stop.store(true, std::memory_order_relaxed);
-            future.wait();
-            for (auto &f : futures) {
-                f.wait();
-            }
-            if (result_future.get()) {
-                return g;
-            } else {
-                continue;
-            }
-        } else {
-            // timeout
-            stop.store(true, std::memory_order_relaxed);
-            future.wait();
-            for (auto &f : futures) {
-                f.wait();
-            }
+        return result_future.get();
+    } else {
+        // timeout
+        stop.store(true, std::memory_order_relaxed);
+        future.wait();
+        for (auto &f : futures) {
+            f.wait();
+        }
+        if (strongCheck) {
             std::string output = "";
             for (const Game &pG : pickedMatches) {
                 output +=
@@ -585,20 +604,17 @@ Game Draw::pickMatch(BS::light_thread_pool &pool) {
             }
             output += std::to_string(g.h) + "-" + std::to_string(g.a);
             std::cout << output << std::endl;
-            throw TimeoutException();
-            // continue;
-            // continue and only throw timeout exception if no
-            // match picked - this could either lead to longer waits, or skip
-            // slow DFS's.
         }
+        throw TimeoutException();
+        // continue;
+        // continue and only throw timeout exception if no
+        // match picked - this could either lead to longer waits, or skip
+        // slow DFS's.
     }
-
-    // throw TimeoutException();
-    std::cerr << "Draw::pickMatch() error: no match picked" << std::endl;
-    exit(2);
 }
 
 Game Draw::pickMatch() {
+    // used in non-simulations
     // pick next match (does not necessarily involve picked team)
     std::vector<Game> orderedRemainingGames(allGames);
 
@@ -634,7 +650,7 @@ Game Draw::pickMatch() {
             // teams[g.a].abbrev
             //           << " " << teams[g.h].pot << "-" << teams[g.a].pot
             //           << std::endl;
-            bool result = DFS(g, allGames, currentDrawState, 0, stop);
+            bool result = DFS(g, allGames, currentDrawState, 0, true, stop);
             bool expected = false;
             if (stop.compare_exchange_strong(expected, true)) {
                 result_promise.set_value(result);
@@ -657,16 +673,16 @@ Game Draw::pickMatch() {
         // default DFS hasn't finished, launch extra workers
         std::vector<std::thread> workers;
         for (int sortMode = 1; sortMode < 3; sortMode++) {
-            workers.emplace_back(
-                [this, sortMode, &g, &stop, &result_promise]() {
-                    DFSContext currentDrawState = createDFSContext();
-                    bool result =
-                        DFS(g, allGames, currentDrawState, sortMode, stop);
-                    bool expected = false;
-                    if (stop.compare_exchange_strong(expected, true)) {
-                        result_promise.set_value(result);
-                    }
-                });
+            workers.emplace_back([this, sortMode, &g, &stop,
+                                  &result_promise]() {
+                DFSContext currentDrawState = createDFSContext();
+                bool result =
+                    DFS(g, allGames, currentDrawState, sortMode, true, stop);
+                bool expected = false;
+                if (stop.compare_exchange_strong(expected, true)) {
+                    result_promise.set_value(result);
+                }
+            });
         }
 
         // // wait until any thread finishes (no timeouts)
@@ -714,7 +730,8 @@ Game Draw::pickMatch() {
 }
 
 bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
-               DFSContext &context, int sortMode, std::atomic<bool> &stop) {
+               DFSContext &context, int sortMode, bool strongCheck,
+               std::atomic<bool> &stop) {
     // g is candidate game
     // return true if timeout, another thread finished, or g accepted
 
@@ -734,64 +751,26 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
     }
 
     // update draw state, then perform checks; if any check fails, revert state
-    // and return false.
+    // and reject
     updateDrawState(g, context);
 
     // accept:
-    // if (context.pickedMatches.size() ==
-    //     static_cast<size_t>((numTeams * numMatchesPerTeam / 2) - 1)) {
-    //     return true;
-    // }
     if (context.pickedMatches.size() ==
         static_cast<size_t>(numTeams * numMatchesPerTeam / 2)) {
         return true;
     }
 
-    // checks:
-
-    // std::cout << "Game under consideration: " << teams[g.h].abbrev << "-"
-    //           << teams[g.a].abbrev << " " << teams[g.h].pot << "-"
-    //           << teams[g.a].pot << std::endl;
+    // weak checking (faster, but less pruning):
 
     // - each team needing away game against g.h pot must have >= 1 valid
     //   matchup left; otherwise, return false
-    // - among teams needing away game against g.h pot: for each represented
-    //   country, if total team count (countryAwayNeeds) > number of away slots
-    //   for pot, reject
-    //     - # away slots = sum for each team in g.h pot: count # of teams in
-    //       country that have valid Game(g.h team, country team), capped at (2
-    //       - number of times g.h team has already played this country) per g.h
-    //       team
-    // std::unordered_map<std::string, std::unordered_map<int, int>>
-    //     awaySlots; // {country} -> {homeTeamInd} -> number of away slots
-    //                // provided by this home team for this country (capped)
-    // std::cout << "teams needing away game against g.h pot: "
-    //           << context.needsAwayAgainstPot[teams[g.h].pot - 1].size()
-    //           << std::endl;
     for (int teamInd : context.needsAwayAgainstPot[teams[g.h].pot - 1]) {
-        // std::cout << " " << teams[teamInd].abbrev << "/" <<
-        // teams[teamInd].pot
-        //           << "-" << teams[teamInd].country << std::endl;
         bool validMatchup = false;
         for (int i = 0; i < numTeamsPerPot; i++) {
             int homeTeamInd = (teams[g.h].pot - 1) * numTeamsPerPot + i;
             if (validRemainingGame(Game(homeTeamInd, teamInd), context)) {
                 validMatchup = true;
                 break;
-
-                // std::string country = teams[teamInd].country;
-                // // maxAwaySlots constrains number of slots provided by a
-                // single
-                // // home team
-                // int maxAwaySlots =
-                //     2 -
-                //     context
-                //         .numOpponentCountryByTeam[std::to_string(homeTeamInd)
-                //         +
-                //                                   ":" + country];
-                // awaySlots[country][homeTeamInd] =
-                //     std::min(maxAwaySlots, awaySlots[country][homeTeamInd] +
-                //     1);
             }
         }
         if (!validMatchup) {
@@ -807,73 +786,16 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
             return false;
         }
     }
-    // // iterate over all countries, check needed slots against total number
-    // // of available away slots
-    // // std::cout << "away slots" << std::endl;
-    // for (const auto &p1 : awaySlots) {
-    //     std::string country = p1.first;
-    //     std::unordered_map<int, int> slots = p1.second;
-    //     int countryAvailableSlots = 0;
-    //     for (const auto &p2 : slots) {
-    //         countryAvailableSlots += p2.second;
-    //     }
-
-    //     if (context.countryAwayNeeds[country + ":" +
-    //                                  std::to_string(teams[g.h].pot)] >
-    //         countryAvailableSlots) {
-    //         // std::cout << "Game under consideration: " << teams[g.h].abbrev
-    //         //           << "-" << teams[g.a].abbrev << " " << teams[g.h].pot
-    //         //           << "-" << teams[g.a].pot << std::endl;
-    //         // std::cout
-    //         //     << " " << country << " "
-    //         //     << context.countryAwayNeeds[country + ":" +
-    //         // std::to_string(teams[g.h].pot)]
-    //         //     << " vs. away slots " << countryAvailableSlots <<
-    //         std::endl;
-    //         // updateDrawState(g, context, true);
-    //         // return false;
-    //     }
-    // }
 
     // - each team needing home game against g.a pot must have >= 1 valid
     //   matchup left; otherwise, return false
-    // - among teams needing home game against g.a pot: for each represented
-    //   country, if total team count (countryHomeTeams) > # of home slots for
-    //   pot, reject
-    //     - # home slots = sum for each team in g.a pot: count # of teams in
-    //       country that have valid Game(country team, g.a team), capped at (2
-    //       - number of times g.a team has already played this country) per g.a
-    //       team
-    // std::unordered_map<std::string, std::unordered_map<int, int>>
-    //     homeSlots; // {country} -> {awayTeamInd} -> number of home slots
-    //                // provided by this away team for this country (capped)
-    // std::cout << "teams needing home game against g.a pot: "
-    //           << context.needsHomeAgainstPot[teams[g.a].pot - 1].size()
-    //           << std::endl;
     for (int teamInd : context.needsHomeAgainstPot[teams[g.a].pot - 1]) {
-        // std::cout << " " << teams[teamInd].abbrev << "/" <<
-        // teams[teamInd].pot
-        //           << "-" << teams[teamInd].country << std::endl;
         bool validMatchup = false;
         for (int i = 0; i < numTeamsPerPot; i++) {
             int awayTeamInd = (teams[g.a].pot - 1) * numTeamsPerPot + i;
             if (validRemainingGame(Game(teamInd, awayTeamInd), context)) {
                 validMatchup = true;
                 break;
-
-                // std::string country = teams[teamInd].country;
-                // // maxHomeSlots constrains number of slots provided by a
-                // single
-                // // home team
-                // int maxHomeSlots =
-                //     2 -
-                //     context
-                //         .numOpponentCountryByTeam[std::to_string(awayTeamInd)
-                //         +
-                //                                   ":" + country];
-                // homeSlots[country][awayTeamInd] =
-                //     std::min(maxHomeSlots, homeSlots[country][awayTeamInd] +
-                //     1);
             }
         }
         if (!validMatchup) {
@@ -889,110 +811,95 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
             return false;
         }
     }
-    // // iterate over all countries, check needed slots against total number
-    // // of available home slots
-    // // std::cout << "home slots" << std::endl;
-    // for (const auto &p1 : homeSlots) {
-    //     std::string country = p1.first;
-    //     std::unordered_map<int, int> slots = p1.second;
-    //     int countryAvailableSlots = 0;
-    //     for (const auto &p2 : slots) {
-    //         countryAvailableSlots += p2.second;
-    //     }
 
-    //     if (context.countryHomeNeeds[country + ":" +
-    //                                  std::to_string(teams[g.a].pot)] >
-    //         countryAvailableSlots) {
-    //         // std::cout << "Game under consideration: " << teams[g.h].abbrev
-    //         //           << "-" << teams[g.a].abbrev << " " << teams[g.h].pot
-    //         //           << "-" << teams[g.a].pot << std::endl;
-    //         // std::cout
-    //         //     << " " << country << " "
-    //         //     << context.countryHomeNeeds[country + ":" +
-    //         // std::to_string(teams[g.a].pot)]
-    //         //     << " vs. home slots " << countryAvailableSlots <<
-    //         std::endl;
-    //         // updateDrawState(g, context, true);
-    //         // return false;
-    //     }
-    // }
+    // strong checking (slower, but more pruning):
 
-    // for country in countries:
-    //   for pot in pots:
-    //     // get remaining country home game demand against pot
-    //     context.countryHomeNeeds[country + ":" + std::to_string(pot)]
-    //     // get conservatively high est of avail slots for these games in pot
-    //     slots := 0
-    //     for each team in pot:
-    //       team_slots := 0
-    //       max_slots for this pot team = 2 - # times this pot team already
-    //         played against country
-    //       for each team in country:
-    //         if valid Game(country team, pot team):
-    //           team_slots = min(max_slots, team_slots+1)
-    //     slots += team_slots
-    //     if demand > slots: return false
-    //
-    //     // mirror for countryAwayNeeds
-    for (auto &p : teamIndsByCountry) {
-        std::string country = p.first;
-        std::vector<int> countryTeamInds = p.second;
-        for (int pot = 1; pot <= numPots; pot++) {
-            int homeDemand =
-                context.countryHomeNeeds[country + ":" + std::to_string(pot)];
-            int homeSlots = 0;
-            int awayDemand =
-                context.countryAwayNeeds[country + ":" + std::to_string(pot)];
-            int awaySlots = 0;
-            for (int i = 0; i < numTeamsPerPot; i++) {
-                int potTeamInd = numTeamsPerPot * (pot - 1) + i;
-                int homeSlotsTeam =
-                    0; // available home slots provided by this pot team
-                int awaySlotsTeam =
-                    0; // available away slots provided by this pot team
-                int maxSlotsTeam =
-                    2 -
+    // - for each country and each pot, country's home games needed against the
+    //   pot and country's away games needed against the pot must not exceed
+    //   respective supply
+    if (strongCheck) {
+        for (auto &p : teamIndsByCountry) {
+            std::string country = p.first;
+            std::vector<int> countryTeamInds = p.second;
+            for (int pot = 1; pot <= numPots; pot++) {
+                // remaining # of home games this country needs against this pot
+                int homeDemand =
                     context
-                        .numOpponentCountryByTeam[std::to_string(potTeamInd) +
-                                                  ":" + country];
-                for (const int &countryTeamInd : countryTeamInds) {
-                    if (validRemainingGame(Game(countryTeamInd, potTeamInd),
-                                           context)) {
-                        homeSlotsTeam =
-                            std::min(maxSlotsTeam, homeSlotsTeam + 1);
+                        .countryHomeNeeds[country + ":" + std::to_string(pot)];
+
+                // conservatively high est of avail slots this pot can provide
+                // to this country for home games
+                int homeSlots = 0;
+
+                // remaining # of away games this country needs against this pot
+                int awayDemand =
+                    context
+                        .countryAwayNeeds[country + ":" + std::to_string(pot)];
+
+                // conservatively high est of avail slots this pot can provide
+                // to this country for away games
+                int awaySlots = 0;
+
+                // compute total homeSlots and awaySlots this pot can provide
+                for (int i = 0; i < numTeamsPerPot; i++) {
+                    int potTeamInd = numTeamsPerPot * (pot - 1) + i;
+
+                    // available home slots provided by this pot team
+                    int homeSlotsTeam = 0;
+
+                    // available away slots provided by this pot team
+                    int awaySlotsTeam = 0;
+
+                    // this pot team can contribute up to maxSlotsTeam to pot's
+                    // total home or away slots
+                    int maxSlotsTeam =
+                        2 - context.numOpponentCountryByTeam[std::to_string(
+                                                                 potTeamInd) +
+                                                             ":" + country];
+
+                    // compute # of home slots and away slots this pot team can
+                    // provide
+                    for (const int &countryTeamInd : countryTeamInds) {
+                        if (validRemainingGame(Game(countryTeamInd, potTeamInd),
+                                               context)) {
+                            homeSlotsTeam =
+                                std::min(maxSlotsTeam, homeSlotsTeam + 1);
+                        }
+                        if (validRemainingGame(Game(potTeamInd, countryTeamInd),
+                                               context)) {
+                            awaySlotsTeam =
+                                std::min(maxSlotsTeam, awaySlotsTeam + 1);
+                        }
                     }
-                    if (validRemainingGame(Game(potTeamInd, countryTeamInd),
-                                           context)) {
-                        awaySlotsTeam =
-                            std::min(maxSlotsTeam, awaySlotsTeam + 1);
-                    }
+                    homeSlots += homeSlotsTeam;
+                    awaySlots += awaySlotsTeam;
                 }
-                homeSlots += homeSlotsTeam;
-                awaySlots += awaySlotsTeam;
-            }
-            if (homeDemand > homeSlots) {
-                // std::cout << "Game under consideration: " <<
-                // teams[g.h].abbrev
-                //           << "-" << teams[g.a].abbrev << " " <<
-                //           teams[g.h].pot
-                //           << "-" << teams[g.a].pot << std::endl;
-                // std::cout << " " << country << " " << homeDemand
-                //           << " vs. home slots " << homeSlots << " in pot "
-                //           << pot << std::endl;
-                updateDrawState(g, context, true);
-                return false;
-            }
-            if (awayDemand > awaySlots) {
-                // std::cout << "Game under consideration: " <<
-                // teams[g.h].abbrev
-                //           << "-" << teams[g.a].abbrev << " " <<
-                //           teams[g.h].pot
-                //           << "-" << teams[g.a].pot << std::endl;
-                // std::cout << " " << country << " " << awayDemand
-                //           << " vs. away slots " << awaySlots << " in pot "
-                //           << pot << std::endl;
-                updateDrawState(g, context, true);
-                return false;
+                if (homeDemand > homeSlots) {
+                    // std::cout << "Game under consideration: " <<
+                    // teams[g.h].abbrev
+                    //           << "-" << teams[g.a].abbrev << " " <<
+                    //           teams[g.h].pot
+                    //           << "-" << teams[g.a].pot << std::endl;
+                    // std::cout << " " << country << " " << homeDemand
+                    //           << " vs. home slots " << homeSlots << " in pot
+                    //           "
+                    //           << pot << std::endl;
+                    updateDrawState(g, context, true);
+                    return false;
+                }
+                if (awayDemand > awaySlots) {
+                    // std::cout << "Game under consideration: " <<
+                    // teams[g.h].abbrev
+                    //           << "-" << teams[g.a].abbrev << " " <<
+                    //           teams[g.h].pot
+                    //           << "-" << teams[g.a].pot << std::endl;
+                    // std::cout << " " << country << " " << awayDemand
+                    //           << " vs. away slots " << awaySlots << " in pot
+                    //           "
+                    //           << pot << std::endl;
+                    updateDrawState(g, context, true);
+                    return false;
+                }
             }
         }
     }
@@ -1060,7 +967,8 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
     // matching away pot
     for (const Game &cG : candidateGames) {
         if (cG.h == newHomeTeamIndex && teams[cG.a].pot == potPairAwayPot) {
-            if (DFS(cG, newRemainingGames, context, sortMode, stop)) {
+            if (DFS(cG, newRemainingGames, context, sortMode, strongCheck,
+                    stop)) {
                 // accept, timeout, or another thread finished
                 // revert state and immediately return
                 updateDrawState(g, context, true);

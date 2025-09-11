@@ -44,8 +44,11 @@ class Draw {
 
     // multithread versions
     DFSContext createDFSContext();
+    bool testCandidateGame(const Game &g, BS::light_thread_pool &pool,
+                           bool strongCheck);
     bool DFS(const Game &g, const std::vector<Game> &remainingGames,
-             DFSContext &context, int sortMode, std::atomic<bool> &stop);
+             DFSContext &context, int sortMode, bool strongCheck,
+             std::atomic<bool> &stop);
     virtual bool validRemainingGame(const Game &g, const DFSContext &context);
     void updateDrawState(const Game &g, DFSContext &context,
                          bool revert = false);
