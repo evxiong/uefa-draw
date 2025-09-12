@@ -2,7 +2,10 @@
 #include "globals.h"
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <ctime>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -67,4 +70,14 @@ std::string toLower(const std::string &s) {
     std::transform(result.begin(), result.end(), result.begin(),
                    [](unsigned char c) { return std::tolower(c); });
     return result;
+}
+
+std::string
+formatSystemTimePoint(const std::chrono::system_clock::time_point &tp,
+                      std::string format) {
+    std::time_t tt = std::chrono::system_clock::to_time_t(tp);
+    std::tm *tm = std::localtime(&tt);
+    std::ostringstream oss;
+    oss << std::put_time(tm, format.c_str());
+    return oss.str();
 }

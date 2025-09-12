@@ -7,8 +7,8 @@
 
 // usage:
 // $ make all
-// $ ./bin/main <year> <ucl | uel | uecl> <iterations> <input csv path>
-//   <output csv path>
+// $ ./bin/main <year> <ucl | uel | uecl> <iterations> [<input csv path>
+//   <output csv path>]
 
 int main(int argc, char **argv) {
     if (argc > 5) {
@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    Simulator s(year, competition, input, output);
-    s.run(iterations);
+    Simulator s(year, competition, input);
+    s.run(iterations, output);
     return 0;
 }

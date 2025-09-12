@@ -11,8 +11,9 @@ UECLDraw::UECLDraw(std::string inputTeamsPath, std::string inputMatchesPath,
                    bool suppress)
     : Draw(inputTeamsPath, inputMatchesPath, 6, 6, 6, 3, suppress) {}
 
-UECLDraw::UECLDraw(const std::vector<Team> &t, bool suppress)
-    : Draw(t, 6, 6, 6, 3, suppress) {}
+UECLDraw::UECLDraw(const std::vector<Team> &t, const std::vector<Game> &m,
+                   bool suppress)
+    : Draw(t, m, 6, 6, 6, 3, suppress) {}
 
 bool UECLDraw::validRemainingGame(const Game &g) {
     if (!Draw::validRemainingGame(g)) {

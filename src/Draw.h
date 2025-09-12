@@ -19,13 +19,13 @@ class Draw {
     bool verifyDraw() const;
 
   protected:
-    Draw(const std::vector<Team> &t, int pots, int teamsPerPot,
-         int matchesPerTeam, int matchesPerPotPair, bool suppress);
+    Draw(const std::vector<Team> &t, const std::vector<Game> &initialMatchState,
+         int pots, int teamsPerPot, int matchesPerTeam, int matchesPerPotPair,
+         bool suppress);
     Draw(std::string inputTeamsPath, std::string inputMatchesPath, int pots,
          int teamsPerPot, int matchesPerTeam, int matchesPerPotPair,
          bool suppress);
 
-    void initializeState();
     void sortRemainingGames(std::vector<Game> &remainingGames, int sortMode);
     void sortRemainingGames(std::vector<Game> &remainingGames,
                             const DFSContext &context, int sortMode);
@@ -37,6 +37,7 @@ class Draw {
     Game pickMatch();
     Game pickMatch(BS::light_thread_pool &pool);
 
+    virtual void initializeState(const std::vector<Game> &initialMatchState);
     virtual bool validRemainingGame(const Game &g);
     virtual bool DFSHomeTeamPredicate(int homeTeamIndex, int awayPot);
     virtual bool verifyDrawHomeAway(std::unordered_map<int, DrawVerifier> &m,
@@ -54,6 +55,8 @@ class Draw {
                          bool revert = false);
     virtual bool DFSHomeTeamPredicate(int homeTeamIndex, int awayPot,
                                       const DFSContext &context) const;
+    virtual bool DFSWeakCheck(const Game &g, const DFSContext &context);
+    virtual bool DFSStrongCheck(const Game &g, const DFSContext &context);
 
     // config
     int numPots;
@@ -107,8 +110,10 @@ class UCLDraw : public Draw {
     UCLDraw(std::string inputTeamsPath, std::string inputMatchesPath,
             bool suppress = true)
         : Draw(inputTeamsPath, inputMatchesPath, 4, 9, 8, 9, suppress) {}
-    UCLDraw(const std::vector<Team> &t, bool suppress = true)
-        : Draw(t, 4, 9, 8, 9, suppress) {}
+    UCLDraw(const std::vector<Team> &t,
+            const std::vector<Game> &m = std::vector<Game>(),
+            bool suppress = true)
+        : Draw(t, m, 4, 9, 8, 9, suppress) {}
 };
 
 class UELDraw : public Draw {
@@ -116,15 +121,19 @@ class UELDraw : public Draw {
     UELDraw(std::string inputTeamsPath, std::string inputMatchesPath,
             bool suppress = true)
         : Draw(inputTeamsPath, inputMatchesPath, 4, 9, 8, 9, suppress) {}
-    UELDraw(const std::vector<Team> &t, bool suppress = true)
-        : Draw(t, 4, 9, 8, 9, suppress) {}
+    UELDraw(const std::vector<Team> &t,
+            const std::vector<Game> &m = std::vector<Game>(),
+            bool suppress = true)
+        : Draw(t, m, 4, 9, 8, 9, suppress) {}
 };
 
 class UECLDraw : public Draw {
   public:
     UECLDraw(std::string inputTeamsPath, std::string inputMatchesPath,
              bool suppress = true);
-    UECLDraw(const std::vector<Team> &t, bool suppress = true);
+    UECLDraw(const std::vector<Team> &t,
+             const std::vector<Game> &m = std::vector<Game>(),
+             bool suppress = true);
 
   protected:
     virtual bool validRemainingGame(const Game &g);

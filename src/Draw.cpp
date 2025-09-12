@@ -15,13 +15,14 @@
 
 const std::string POT_COLORS[] = {RED, BLUE, GREEN, YELLOW, CYAN, MAGENTA};
 
-Draw::Draw(const std::vector<Team> &t, int pots, int teamsPerPot,
-           int matchesPerTeam, int matchesPerPotPair, bool s)
+Draw::Draw(const std::vector<Team> &t,
+           const std::vector<Game> &initialMatchState, int pots,
+           int teamsPerPot, int matchesPerTeam, int matchesPerPotPair, bool s)
     : numPots(pots), numTeamsPerPot(teamsPerPot),
       numMatchesPerTeam(matchesPerTeam), numTeams(numPots * numTeamsPerPot),
       numMatchesPerPotPair(matchesPerPotPair), suppress(s), teams(t),
       randomEngine(std::random_device{}()) {
-    initializeState();
+    initializeState(initialMatchState);
 }
 
 Draw::Draw(std::string inputTeamsPath, std::string inputMatchesPath, int pots,
@@ -31,30 +32,12 @@ Draw::Draw(std::string inputTeamsPath, std::string inputMatchesPath, int pots,
       numMatchesPerPotPair(matchesPerPotPair), suppress(s),
       teams(readCSVTeams(inputTeamsPath)),
       randomEngine(std::random_device{}()) {
-    initializeState();
-
-    if (inputMatchesPath != "") {
-        // initialize state with input matches
-        std::vector<Game> initialGames = readTXTGames(inputMatchesPath, teams);
-        for (const Game &g : initialGames) {
-            updateDrawState(g);
-            if (!suppress) {
-                std::cout << GRAY << teams[g.h].abbrev << "-"
-                          << teams[g.a].abbrev << " " << teams[g.h].pot << "-"
-                          << teams[g.a].pot << RESET << std::endl;
-            }
-            gamesByTeam[g.h].push_back(g);
-            gamesByTeam[g.a].push_back(g);
-            allGames.erase(std::remove_if(allGames.begin(), allGames.end(),
-                                          [this](const Game &aG) {
-                                              return !validRemainingGame(aG);
-                                          }),
-                           allGames.end());
-        }
-    }
+    initializeState(inputMatchesPath != ""
+                        ? readTXTGames(inputMatchesPath, teams)
+                        : std::vector<Game>());
 }
 
-void Draw::initializeState() {
+void Draw::initializeState(const std::vector<Game> &initialMatchState) {
     for (size_t i = 0; i < teams.size(); i++) {
         numTeamsByCountry[teams[i].country] += 1;
         teamIndsByCountry[teams[i].country].push_back(i);
@@ -81,6 +64,22 @@ void Draw::initializeState() {
                 allGames.push_back(Game(j, i));
             }
         }
+    }
+    // initialize draw state with input matches
+    for (const Game &g : initialMatchState) {
+        updateDrawState(g);
+        if (!suppress) {
+            std::cout << GRAY << teams[g.h].abbrev << "-" << teams[g.a].abbrev
+                      << " " << teams[g.h].pot << "-" << teams[g.a].pot << RESET
+                      << std::endl;
+        }
+        gamesByTeam[g.h].push_back(g);
+        gamesByTeam[g.a].push_back(g);
+        allGames.erase(std::remove_if(allGames.begin(), allGames.end(),
+                                      [this](const Game &aG) {
+                                          return !validRemainingGame(aG);
+                                      }),
+                       allGames.end());
     }
 }
 
@@ -755,8 +754,8 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
 
     // weak checking (faster, but less pruning):
 
-    // - each team needing away game against g.h pot must have >= 1 valid
-    //   matchup left; otherwise, return false
+    // - each team needing away game against g.h pot (or paired g.h pot for
+    //   UECL) must have >= 1 valid matchup left; otherwise, return false
     for (int teamInd : context.needsAwayAgainstPot[teams[g.h].pot - 1]) {
         bool validMatchup = false;
         for (int i = 0; i < numTeamsPerPot; i++) {
@@ -780,8 +779,8 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
         }
     }
 
-    // - each team needing home game against g.a pot must have >= 1 valid
-    //   matchup left; otherwise, return false
+    // - each team needing home game against g.a pot (or paired g.a pot) must
+    //   have >= 1 valid matchup left; otherwise, return false
     for (int teamInd : context.needsHomeAgainstPot[teams[g.a].pot - 1]) {
         bool validMatchup = false;
         for (int i = 0; i < numTeamsPerPot; i++) {
@@ -810,6 +809,9 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
     // - for each country and each pot, country's home games needed against the
     //   pot and country's away games needed against the pot must not exceed
     //   respective supply
+    // - UECL: for each country and each pot pairing, country's home games
+    //   needed against the pot pairing and country's away games needed against
+    //   the pot pairing must not exceed respective supply
     if (strongCheck) {
         for (auto &p : teamIndsByCountry) {
             std::string country = p.first;

@@ -2,6 +2,7 @@
 #define UTILS_H
 
 #include "globals.h"
+#include <chrono>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -11,6 +12,9 @@ std::vector<Game> readTXTGames(std::string input_file,
                                const std::vector<Team> &teams);
 std::string trim(const std::string &s);
 std::string toLower(const std::string &s);
+std::string
+formatSystemTimePoint(const std::chrono::system_clock::time_point &tp,
+                      std::string format);
 
 // Get `key`'s value from map; return `default_value` if `key` not found
 template <typename Map, typename Key,
