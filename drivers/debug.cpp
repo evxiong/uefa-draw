@@ -6,6 +6,7 @@
 #include "utils.h"
 #include <iostream>
 #include <memory>
+#include <string>
 #include <vector>
 
 // usage:
@@ -42,20 +43,20 @@ int main(int argc, char **argv) {
 
     std::unique_ptr<Draw> d;
     if (competition == "ucl")
-        d.reset(new UCLDraw(inputTeamsPath, inputMatchesPath));
+        d.reset(new UCLDraw(inputTeamsPath, inputMatchesPath, false));
     else if (competition == "uel")
-        d.reset(new UELDraw(inputTeamsPath, inputMatchesPath));
+        d.reset(new UELDraw(inputTeamsPath, inputMatchesPath, false));
     else if (competition == "uecl")
-        d.reset(new UECLDraw(inputTeamsPath, inputMatchesPath));
+        d.reset(new UECLDraw(inputTeamsPath, inputMatchesPath, false));
     else {
         std::cerr << "Invalid competition type: must be 'ucl', 'uel', or 'uecl'"
                   << std::endl;
         exit(1);
     }
 
-    bool valid = d->draw(false);
+    bool valid = d->draw();
     if (valid) {
         d->displayPots();
-        d->verifyDraw(false);
+        d->verifyDraw();
     }
 }

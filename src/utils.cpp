@@ -14,13 +14,16 @@ std::vector<Team> readCSVTeams(std::string input_file) {
     std::string line;
     std::getline(file, line);
     while (std::getline(file, line)) {
+        if (trim(line).empty()) {
+            continue;
+        }
         std::stringstream ss(line);
         std::string field;
         std::vector<std::string> row;
         while (std::getline(ss, field, ',')) {
             row.push_back(field);
         }
-        teams.push_back(Team(stoi(row[0]), row[1], row[2], row[3]));
+        teams.push_back(Team(std::stoi(row[0]), row[1], row[2], row[3]));
     }
     return teams;
 }
@@ -36,6 +39,9 @@ std::vector<Game> readTXTGames(std::string input_file,
     std::ifstream file(input_file);
     std::string line;
     while (std::getline(file, line)) {
+        if (trim(line).empty()) {
+            continue;
+        }
         size_t pos = line.find('-');
         std::string home = trim(line.substr(0, pos));
         std::string away = trim(line.substr(pos + 1));

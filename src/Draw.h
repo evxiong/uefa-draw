@@ -12,17 +12,18 @@
 
 class Draw {
   public:
-    bool draw(bool suppress = true); // returns false if timeout
+    bool draw(); // returns false if timeout
     bool draw(BS::light_thread_pool &pool);
     void displayPots(bool showCountries = false) const;
-    const std::vector<Game> &getSchedule() const;
-    bool verifyDraw(bool suppress = true) const;
+    const std::vector<Game> getPickedMatches() const;
+    bool verifyDraw() const;
 
   protected:
     Draw(const std::vector<Team> &t, int pots, int teamsPerPot,
-         int matchesPerTeam, int matchesPerPotPair);
+         int matchesPerTeam, int matchesPerPotPair, bool suppress);
     Draw(std::string inputTeamsPath, std::string inputMatchesPath, int pots,
-         int teamsPerPot, int matchesPerTeam, int matchesPerPotPair);
+         int teamsPerPot, int matchesPerTeam, int matchesPerPotPair,
+         bool suppress);
 
     void initializeState();
     void sortRemainingGames(std::vector<Game> &remainingGames, int sortMode);
@@ -39,8 +40,7 @@ class Draw {
     virtual bool validRemainingGame(const Game &g);
     virtual bool DFSHomeTeamPredicate(int homeTeamIndex, int awayPot);
     virtual bool verifyDrawHomeAway(std::unordered_map<int, DrawVerifier> &m,
-                                    int homeTeamIndex, int awayTeamIndex,
-                                    bool suppress) const;
+                                    int homeTeamIndex, int awayTeamIndex) const;
 
     // multithread versions
     DFSContext createDFSContext();
@@ -61,6 +61,7 @@ class Draw {
     int numMatchesPerTeam;
     int numTeams;
     int numMatchesPerPotPair;
+    bool suppress;
     std::vector<Team> teams; // all Teams in draw
     std::mt19937 randomEngine;
     std::unordered_map<std::string, int>
@@ -103,29 +104,33 @@ class Draw {
 
 class UCLDraw : public Draw {
   public:
-    UCLDraw(std::string inputTeamsPath, std::string inputMatchesPath)
-        : Draw(inputTeamsPath, inputMatchesPath, 4, 9, 8, 9) {}
-    UCLDraw(const std::vector<Team> &t) : Draw(t, 4, 9, 8, 9) {}
+    UCLDraw(std::string inputTeamsPath, std::string inputMatchesPath,
+            bool suppress = true)
+        : Draw(inputTeamsPath, inputMatchesPath, 4, 9, 8, 9, suppress) {}
+    UCLDraw(const std::vector<Team> &t, bool suppress = true)
+        : Draw(t, 4, 9, 8, 9, suppress) {}
 };
 
 class UELDraw : public Draw {
   public:
-    UELDraw(std::string inputTeamsPath, std::string inputMatchesPath)
-        : Draw(inputTeamsPath, inputMatchesPath, 4, 9, 8, 9) {}
-    UELDraw(const std::vector<Team> &t) : Draw(t, 4, 9, 8, 9) {}
+    UELDraw(std::string inputTeamsPath, std::string inputMatchesPath,
+            bool suppress = true)
+        : Draw(inputTeamsPath, inputMatchesPath, 4, 9, 8, 9, suppress) {}
+    UELDraw(const std::vector<Team> &t, bool suppress = true)
+        : Draw(t, 4, 9, 8, 9, suppress) {}
 };
 
 class UECLDraw : public Draw {
   public:
-    UECLDraw(std::string inputTeamsPath, std::string inputMatchesPath);
-    UECLDraw(const std::vector<Team> &t);
+    UECLDraw(std::string inputTeamsPath, std::string inputMatchesPath,
+             bool suppress = true);
+    UECLDraw(const std::vector<Team> &t, bool suppress = true);
 
   protected:
     virtual bool validRemainingGame(const Game &g);
     virtual bool DFSHomeTeamPredicate(int homeTeamIndex, int awayPot);
     virtual bool verifyDrawHomeAway(std::unordered_map<int, DrawVerifier> &m,
-                                    int homeTeamIndex, int awayTeamIndex,
-                                    bool suppress) const;
+                                    int homeTeamIndex, int awayTeamIndex) const;
 
     // multithread versions
     virtual bool validRemainingGame(const Game &g, const DFSContext &context);

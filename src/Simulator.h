@@ -17,8 +17,8 @@ class Simulator {
   private:
     void writeResults() const;
 
+    int year;
     std::string competition; // 'ucl', 'uel', or 'uecl'
-    std::string input_file;
     std::filesystem::path output_path;
     std::vector<Team> teams;
     std::unordered_map<std::string, int> counts; // {homeInd}:{awayInd} -> count

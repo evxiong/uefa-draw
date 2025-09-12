@@ -7,10 +7,12 @@
 #include <string>
 #include <vector>
 
-UECLDraw::UECLDraw(std::string inputTeamsPath, std::string inputMatchesPath)
-    : Draw(inputTeamsPath, inputMatchesPath, 6, 6, 6, 3) {}
+UECLDraw::UECLDraw(std::string inputTeamsPath, std::string inputMatchesPath,
+                   bool suppress)
+    : Draw(inputTeamsPath, inputMatchesPath, 6, 6, 6, 3, suppress) {}
 
-UECLDraw::UECLDraw(const std::vector<Team> &t) : Draw(t, 6, 6, 6, 3) {}
+UECLDraw::UECLDraw(const std::vector<Team> &t, bool suppress)
+    : Draw(t, 6, 6, 6, 3, suppress) {}
 
 bool UECLDraw::validRemainingGame(const Game &g) {
     if (!Draw::validRemainingGame(g)) {
@@ -98,8 +100,7 @@ bool UECLDraw::DFSHomeTeamPredicate(int homeTeamIndex, int awayPot,
 }
 
 bool UECLDraw::verifyDrawHomeAway(std::unordered_map<int, DrawVerifier> &m,
-                                  int homeTeamIndex, int awayTeamIndex,
-                                  bool suppress) const {
+                                  int homeTeamIndex, int awayTeamIndex) const {
     // check for 1 home, 1 away match within paired pots (1/2, 3/4, 5/6) for
     // each team
     int homePot = teams[homeTeamIndex].pot;

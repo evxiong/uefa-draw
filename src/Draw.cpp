@@ -16,19 +16,19 @@
 const std::string POT_COLORS[] = {RED, BLUE, GREEN, YELLOW, CYAN, MAGENTA};
 
 Draw::Draw(const std::vector<Team> &t, int pots, int teamsPerPot,
-           int matchesPerTeam, int matchesPerPotPair)
+           int matchesPerTeam, int matchesPerPotPair, bool s)
     : numPots(pots), numTeamsPerPot(teamsPerPot),
       numMatchesPerTeam(matchesPerTeam), numTeams(numPots * numTeamsPerPot),
-      numMatchesPerPotPair(matchesPerPotPair), teams(t),
+      numMatchesPerPotPair(matchesPerPotPair), suppress(s), teams(t),
       randomEngine(std::random_device{}()) {
     initializeState();
 }
 
 Draw::Draw(std::string inputTeamsPath, std::string inputMatchesPath, int pots,
-           int teamsPerPot, int matchesPerTeam, int matchesPerPotPair)
+           int teamsPerPot, int matchesPerTeam, int matchesPerPotPair, bool s)
     : numPots(pots), numTeamsPerPot(teamsPerPot),
       numMatchesPerTeam(matchesPerTeam), numTeams(numPots * numTeamsPerPot),
-      numMatchesPerPotPair(matchesPerPotPair),
+      numMatchesPerPotPair(matchesPerPotPair), suppress(s),
       teams(readCSVTeams(inputTeamsPath)),
       randomEngine(std::random_device{}()) {
     initializeState();
@@ -38,9 +38,11 @@ Draw::Draw(std::string inputTeamsPath, std::string inputMatchesPath, int pots,
         std::vector<Game> initialGames = readTXTGames(inputMatchesPath, teams);
         for (const Game &g : initialGames) {
             updateDrawState(g);
-            std::cout << GRAY << teams[g.h].abbrev << "-" << teams[g.a].abbrev
-                      << " " << teams[g.h].pot << "-" << teams[g.a].pot << RESET
-                      << std::endl;
+            if (!suppress) {
+                std::cout << GRAY << teams[g.h].abbrev << "-"
+                          << teams[g.a].abbrev << " " << teams[g.h].pot << "-"
+                          << teams[g.a].pot << RESET << std::endl;
+            }
             gamesByTeam[g.h].push_back(g);
             gamesByTeam[g.a].push_back(g);
             allGames.erase(std::remove_if(allGames.begin(), allGames.end(),
@@ -82,7 +84,7 @@ void Draw::initializeState() {
     }
 }
 
-const std::vector<Game> &Draw::getSchedule() const {
+const std::vector<Game> Draw::getPickedMatches() const {
     return pickedMatches;
 }
 
@@ -160,7 +162,7 @@ bool Draw::validRemainingGame(const Game &g, const DFSContext &context) {
     return true;
 }
 
-bool Draw::draw(bool suppress) {
+bool Draw::draw() {
     try {
         for (int pot = 1; pot <= numPots; pot++) {
             for (int i = 0; i < numTeamsPerPot; i++) {
@@ -595,15 +597,6 @@ bool Draw::testCandidateGame(const Game &g, BS::light_thread_pool &pool,
         future.wait();
         for (auto &f : futures) {
             f.wait();
-        }
-        if (strongCheck) {
-            std::string output = "";
-            for (const Game &pG : pickedMatches) {
-                output +=
-                    std::to_string(pG.h) + "-" + std::to_string(pG.a) + ",";
-            }
-            output += std::to_string(g.h) + "-" + std::to_string(g.a);
-            std::cout << output << std::endl;
         }
         throw TimeoutException();
         // continue;
@@ -1135,7 +1128,7 @@ void Draw::displayPots(bool showCountries) const {
     }
 }
 
-bool Draw::verifyDraw(bool suppress) const {
+bool Draw::verifyDraw() const {
     // check for correct total number of matches
     size_t expectedMatches = numTeams * numMatchesPerTeam / 2;
     if (pickedMatches.size() != expectedMatches) {
@@ -1175,7 +1168,7 @@ bool Draw::verifyDraw(bool suppress) const {
             return false;
         }
 
-        if (!verifyDrawHomeAway(m, g.h, g.a, suppress)) {
+        if (!verifyDrawHomeAway(m, g.h, g.a)) {
             return false;
         }
     }
@@ -1214,8 +1207,7 @@ bool Draw::verifyDraw(bool suppress) const {
 }
 
 bool Draw::verifyDrawHomeAway(std::unordered_map<int, DrawVerifier> &m,
-                              int homeTeamIndex, int awayTeamIndex,
-                              bool suppress) const {
+                              int homeTeamIndex, int awayTeamIndex) const {
     // check for 1 home, 1 away match per pot for each team
     std::string hp = std::to_string(teams[homeTeamIndex].pot);
     std::string ap = std::to_string(teams[awayTeamIndex].pot);
