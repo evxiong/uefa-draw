@@ -732,13 +732,8 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
         return true;
     }
 
-    // std::cout << "\t\t" << teams[g.h].abbrev << "-" << teams[g.a].abbrev << "
-    // "
-    //           << teams[g.h].pot << "-" << teams[g.a].pot << std::endl;
-
     // reject:
     if (!validRemainingGame(g, context)) {
-        // std::cout << "\t\t\treject (invalid remaining game)" << std::endl;
         return false;
     }
 
@@ -753,150 +748,15 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
     }
 
     // weak checking (faster, but less pruning):
-
-    // - each team needing away game against g.h pot (or paired g.h pot for
-    //   UECL) must have >= 1 valid matchup left; otherwise, return false
-    for (int teamInd : context.needsAwayAgainstPot[teams[g.h].pot - 1]) {
-        bool validMatchup = false;
-        for (int i = 0; i < numTeamsPerPot; i++) {
-            int homeTeamInd = (teams[g.h].pot - 1) * numTeamsPerPot + i;
-            if (validRemainingGame(Game(homeTeamInd, teamInd), context)) {
-                validMatchup = true;
-                break;
-            }
-        }
-        if (!validMatchup) {
-            // std::cout << "\t\t" << teams[g.h].abbrev << "-" <<
-            // teams[g.a].abbrev
-            //           << " " << teams[g.h].pot << "-" << teams[g.a].pot
-            //           << std::endl;
-            // std::cout << "\t\t\t" << teams[teamInd].abbrev
-            //           << " missing valid away game matchup" << std::endl;
-            updateDrawState(g, context, true);
-            // std::cout << "\t\t\treject (missing valid away game matchup)"
-            //           << std::endl;
-            return false;
-        }
-    }
-
-    // - each team needing home game against g.a pot (or paired g.a pot) must
-    //   have >= 1 valid matchup left; otherwise, return false
-    for (int teamInd : context.needsHomeAgainstPot[teams[g.a].pot - 1]) {
-        bool validMatchup = false;
-        for (int i = 0; i < numTeamsPerPot; i++) {
-            int awayTeamInd = (teams[g.a].pot - 1) * numTeamsPerPot + i;
-            if (validRemainingGame(Game(teamInd, awayTeamInd), context)) {
-                validMatchup = true;
-                break;
-            }
-        }
-        if (!validMatchup) {
-            // std::cout << "\t\t" << teams[g.h].abbrev << "-" <<
-            // teams[g.a].abbrev
-            //           << " " << teams[g.h].pot << "-" << teams[g.a].pot
-            //           << std::endl;
-            // std::cout << "\t\t\t" << teams[teamInd].abbrev
-            //           << " missing valid home game matchup" << std::endl;
-            updateDrawState(g, context, true);
-            // std::cout << "\t\t\treject (missing valid home game matchup)"
-            //           << std::endl;
-            return false;
-        }
+    if (!DFSWeakCheck(g, context)) {
+        updateDrawState(g, context, true);
+        return false;
     }
 
     // strong checking (slower, but more pruning):
-
-    // - for each country and each pot, country's home games needed against the
-    //   pot and country's away games needed against the pot must not exceed
-    //   respective supply
-    // - UECL: for each country and each pot pairing, country's home games
-    //   needed against the pot pairing and country's away games needed against
-    //   the pot pairing must not exceed respective supply
-    if (strongCheck) {
-        for (auto &p : teamIndsByCountry) {
-            std::string country = p.first;
-            std::vector<int> countryTeamInds = p.second;
-            for (int pot = 1; pot <= numPots; pot++) {
-                // remaining # of home games this country needs against this pot
-                int homeDemand =
-                    context
-                        .countryHomeNeeds[country + ":" + std::to_string(pot)];
-
-                // conservatively high est of avail slots this pot can provide
-                // to this country for home games
-                int homeSlots = 0;
-
-                // remaining # of away games this country needs against this pot
-                int awayDemand =
-                    context
-                        .countryAwayNeeds[country + ":" + std::to_string(pot)];
-
-                // conservatively high est of avail slots this pot can provide
-                // to this country for away games
-                int awaySlots = 0;
-
-                // compute total homeSlots and awaySlots this pot can provide
-                for (int i = 0; i < numTeamsPerPot; i++) {
-                    int potTeamInd = numTeamsPerPot * (pot - 1) + i;
-
-                    // available home slots provided by this pot team
-                    int homeSlotsTeam = 0;
-
-                    // available away slots provided by this pot team
-                    int awaySlotsTeam = 0;
-
-                    // this pot team can contribute up to maxSlotsTeam to pot's
-                    // total home or away slots
-                    int maxSlotsTeam =
-                        2 - context.numOpponentCountryByTeam[std::to_string(
-                                                                 potTeamInd) +
-                                                             ":" + country];
-
-                    // compute # of home slots and away slots this pot team can
-                    // provide
-                    for (const int &countryTeamInd : countryTeamInds) {
-                        if (validRemainingGame(Game(countryTeamInd, potTeamInd),
-                                               context)) {
-                            homeSlotsTeam =
-                                std::min(maxSlotsTeam, homeSlotsTeam + 1);
-                        }
-                        if (validRemainingGame(Game(potTeamInd, countryTeamInd),
-                                               context)) {
-                            awaySlotsTeam =
-                                std::min(maxSlotsTeam, awaySlotsTeam + 1);
-                        }
-                    }
-                    homeSlots += homeSlotsTeam;
-                    awaySlots += awaySlotsTeam;
-                }
-                if (homeDemand > homeSlots) {
-                    // std::cout << "Game under consideration: " <<
-                    // teams[g.h].abbrev
-                    //           << "-" << teams[g.a].abbrev << " " <<
-                    //           teams[g.h].pot
-                    //           << "-" << teams[g.a].pot << std::endl;
-                    // std::cout << " " << country << " " << homeDemand
-                    //           << " vs. home slots " << homeSlots << " in pot
-                    //           "
-                    //           << pot << std::endl;
-                    updateDrawState(g, context, true);
-                    return false;
-                }
-                if (awayDemand > awaySlots) {
-                    // std::cout << "Game under consideration: " <<
-                    // teams[g.h].abbrev
-                    //           << "-" << teams[g.a].abbrev << " " <<
-                    //           teams[g.h].pot
-                    //           << "-" << teams[g.a].pot << std::endl;
-                    // std::cout << " " << country << " " << awayDemand
-                    //           << " vs. away slots " << awaySlots << " in pot
-                    //           "
-                    //           << pot << std::endl;
-                    updateDrawState(g, context, true);
-                    return false;
-                }
-            }
-        }
+    if (strongCheck && !DFSStrongCheck(g, context)) {
+        updateDrawState(g, context, true);
+        return false;
     }
 
     // recursive case: g picked
@@ -976,6 +836,111 @@ bool Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
     updateDrawState(g, context, true);
     // std::cout << "\t\t\treject (exhausted candidates)" << std::endl;
     return false;
+}
+
+bool Draw::DFSWeakCheck(const Game &g, const DFSContext &context) {
+    // return true if checks passed; false if any check failed
+
+    // - each team needing away game against g.h pot must have >= 1 valid
+    //   matchup left; otherwise, return false
+    for (int teamInd : context.needsAwayAgainstPot[teams[g.h].pot - 1]) {
+        bool validMatchup = false;
+        for (int i = 0; i < numTeamsPerPot; i++) {
+            int homeTeamInd = (teams[g.h].pot - 1) * numTeamsPerPot + i;
+            if (validRemainingGame(Game(homeTeamInd, teamInd), context)) {
+                validMatchup = true;
+                break;
+            }
+        }
+        if (!validMatchup) {
+            return false;
+        }
+    }
+
+    // - each team needing home game against g.a pot must have >= 1 valid
+    //   matchup left; otherwise, return false
+    for (int teamInd : context.needsHomeAgainstPot[teams[g.a].pot - 1]) {
+        bool validMatchup = false;
+        for (int i = 0; i < numTeamsPerPot; i++) {
+            int awayTeamInd = (teams[g.a].pot - 1) * numTeamsPerPot + i;
+            if (validRemainingGame(Game(teamInd, awayTeamInd), context)) {
+                validMatchup = true;
+                break;
+            }
+        }
+        if (!validMatchup) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool Draw::DFSStrongCheck(const Game &g, const DFSContext &context) {
+    // return true if checks passed; false if any check failed
+
+    // - for each country and each pot, country's home games needed against the
+    //   pot and country's away games needed against the pot must not exceed
+    //   respective supply
+    for (auto &p : teamIndsByCountry) {
+        std::string country = p.first;
+        std::vector<int> countryTeamInds = p.second;
+        for (int pot = 1; pot <= numPots; pot++) {
+            // remaining # of home games this country needs against this pot
+            int homeDemand = context.countryHomeNeeds.at(country + ":" +
+                                                         std::to_string(pot));
+
+            // conservatively high est of avail slots this pot can provide
+            // to this country for home games
+            int homeSlots = 0;
+
+            // remaining # of away games this country needs against this pot
+            int awayDemand = context.countryAwayNeeds.at(country + ":" +
+                                                         std::to_string(pot));
+
+            // conservatively high est of avail slots this pot can provide
+            // to this country for away games
+            int awaySlots = 0;
+
+            // compute total homeSlots and awaySlots this pot can provide
+            for (int i = 0; i < numTeamsPerPot; i++) {
+                int potTeamInd = numTeamsPerPot * (pot - 1) + i;
+
+                // available home slots provided by this pot team
+                int homeSlotsTeam = 0;
+
+                // available away slots provided by this pot team
+                int awaySlotsTeam = 0;
+
+                // this pot team can contribute up to maxSlotsTeam to pot's
+                // total home or away slots
+                int maxSlotsTeam =
+                    2 - get_or(context.numOpponentCountryByTeam,
+                               std::to_string(potTeamInd) + ":" + country, 0);
+
+                // compute # of home slots and away slots this pot team can
+                // provide
+                for (const int &countryTeamInd : countryTeamInds) {
+                    if (validRemainingGame(Game(countryTeamInd, potTeamInd),
+                                           context)) {
+                        homeSlotsTeam =
+                            std::min(maxSlotsTeam, homeSlotsTeam + 1);
+                    }
+                    if (validRemainingGame(Game(potTeamInd, countryTeamInd),
+                                           context)) {
+                        awaySlotsTeam =
+                            std::min(maxSlotsTeam, awaySlotsTeam + 1);
+                    }
+                }
+                homeSlots += homeSlotsTeam;
+                awaySlots += awaySlotsTeam;
+            }
+            if (homeDemand > homeSlots || awayDemand > awaySlots) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 int Draw::DFS(const Game &g, const std::vector<Game> &remainingGames,
