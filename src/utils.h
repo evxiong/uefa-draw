@@ -7,8 +7,8 @@
 #include <unordered_map>
 #include <vector>
 
-std::vector<Team> readCSVTeams(std::string input_file);
-std::vector<Game> readTXTGames(std::string input_file,
+std::vector<Team> readCSVTeams(std::string path);
+std::vector<Game> readTXTGames(std::string path,
                                const std::vector<Team> &teams);
 std::string trim(const std::string &s);
 std::string toLower(const std::string &s);

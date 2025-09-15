@@ -7,15 +7,15 @@
 #include <string>
 #include <vector>
 
-UECLDraw::UECLDraw(std::string inputTeamsPath, std::string inputMatchesPath,
+UECLDraw::UECLDraw(std::string teamsPath, std::string initialGamesPath,
                    bool suppress)
-    : Draw(inputTeamsPath, inputMatchesPath, 6, 6, 6, 3, suppress) {}
+    : Draw(teamsPath, initialGamesPath, 6, 6, 6, 3, suppress) {}
 
 UECLDraw::UECLDraw(const std::vector<Team> &t, const std::vector<Game> &m,
                    bool suppress)
     : Draw(t, m, 6, 6, 6, 3, suppress) {}
 
-bool UECLDraw::validRemainingGame(const Game &g) {
+bool UECLDraw::validRemainingGame(const Game &g) const {
     if (!Draw::validRemainingGame(g)) {
         return false;
     }
@@ -26,26 +26,31 @@ bool UECLDraw::validRemainingGame(const Game &g) {
     std::string pairedHomePot = std::to_string(hp % 2 == 0 ? hp - 1 : hp + 1);
     std::string awayPot = std::to_string(ap);
     std::string pairedAwayPot = std::to_string(ap % 2 == 0 ? ap - 1 : ap + 1);
-    if (hasPlayedWithPotMap[std::to_string(g.h) + ":" + awayPot +
-                            ":a"] || // Game's home team has already played away
-                                     // team's pot (as away team)
-        hasPlayedWithPotMap[std::to_string(g.a) + ":" + homePot +
-                            ":h"] || // Game's away team has already played home
-                                     // team's pot (as home team)
-        hasPlayedWithPotMap[std::to_string(g.h) + ":" + pairedAwayPot +
-                            ":h"] || // Game's home team has already played away
-                                     // team's paired pot (as home team)
-        hasPlayedWithPotMap[std::to_string(g.a) + ":" + pairedHomePot +
-                            ":a"] // Game's away team has already played home
-                                  // team's paired pot (as away team)
+    if (get_or(isPickedByTeamIndOppPotLocation,
+               std::to_string(g.h) + ":" + awayPot + ":a",
+               false) || // Game's home team has already played away
+                         // team's pot (as away team)
+        get_or(isPickedByTeamIndOppPotLocation,
+               std::to_string(g.a) + ":" + homePot + ":h",
+               false) || // Game's away team has already played home
+                         // team's pot (as home team)
+        get_or(isPickedByTeamIndOppPotLocation,
+               std::to_string(g.h) + ":" + pairedAwayPot + ":h",
+               false) || // Game's home team has already played away
+                         // team's paired pot (as home team)
+        get_or(isPickedByTeamIndOppPotLocation,
+               std::to_string(g.a) + ":" + pairedHomePot + ":a",
+               false) // Game's away team has already played home
+                      // team's paired pot (as away team)
     ) {
         return false;
     }
     return true;
 }
 
-bool UECLDraw::validRemainingGame(const Game &g, const DFSContext &context) {
-    if (!Draw::validRemainingGame(g, context)) {
+bool UECLDraw::dfsValidRemainingGame(const Game &g,
+                                     const DFSContext &context) const {
+    if (!Draw::dfsValidRemainingGame(g, context)) {
         return false;
     }
 
@@ -55,19 +60,19 @@ bool UECLDraw::validRemainingGame(const Game &g, const DFSContext &context) {
     std::string pairedHomePot = std::to_string(hp % 2 == 0 ? hp - 1 : hp + 1);
     std::string awayPot = std::to_string(ap);
     std::string pairedAwayPot = std::to_string(ap % 2 == 0 ? ap - 1 : ap + 1);
-    if (get_or(context.hasPlayedWithPotMap,
+    if (get_or(context.isPickedByTeamIndOppPotLocation,
                std::to_string(g.h) + ":" + awayPot + ":a",
                false) || // Game's home team has already played away
                          // team's pot (as away team)
-        get_or(context.hasPlayedWithPotMap,
+        get_or(context.isPickedByTeamIndOppPotLocation,
                std::to_string(g.a) + ":" + homePot + ":h",
                false) || // Game's away team has already played home
                          // team's pot (as home team)
-        get_or(context.hasPlayedWithPotMap,
+        get_or(context.isPickedByTeamIndOppPotLocation,
                std::to_string(g.h) + ":" + pairedAwayPot + ":h",
                false) || // Game's home team has already played away
                          // team's paired pot (as home team)
-        get_or(context.hasPlayedWithPotMap,
+        get_or(context.isPickedByTeamIndOppPotLocation,
                std::to_string(g.a) + ":" + pairedHomePot + ":a",
                false) // Game's away team has already played home
                       // team's paired pot (as away team)
@@ -101,9 +106,9 @@ void UECLDraw::updateDrawState(const Game &g, bool revert) {
     }
 }
 
-void UECLDraw::updateDrawState(const Game &g, DFSContext &context,
-                               bool revert) {
-    Draw::updateDrawState(g, context, revert);
+void UECLDraw::dfsUpdateDrawState(const Game &g, DFSContext &context,
+                                  bool revert) const {
+    Draw::dfsUpdateDrawState(g, context, revert);
 
     int hp = teams[g.h].pot;
     int ap = teams[g.a].pot;
@@ -126,32 +131,24 @@ void UECLDraw::updateDrawState(const Game &g, DFSContext &context,
     }
 }
 
-bool UECLDraw::DFSHomeTeamPredicate(int homeTeamIndex, int awayPot) {
+bool UECLDraw::dfsHomeTeamPredicate(int homeTeamIndex, int awayPot,
+                                    const DFSContext &context) const {
     // return true to use new home team, false to reject
     std::string h = std::to_string(homeTeamIndex);
     std::string ap = std::to_string(awayPot);
     std::string pairedAp =
         std::to_string(awayPot % 2 == 0 ? awayPot - 1 : awayPot + 1);
-    return !hasPlayedWithPotMap[h + ":" + ap + ":h"] &&
-           !hasPlayedWithPotMap[h + ":" + ap + ":a"] &&
-           !hasPlayedWithPotMap[h + ":" + pairedAp + ":h"];
+    return !get_or(context.isPickedByTeamIndOppPotLocation, h + ":" + ap + ":h",
+                   false) &&
+           !get_or(context.isPickedByTeamIndOppPotLocation, h + ":" + ap + ":a",
+                   false) &&
+           !get_or(context.isPickedByTeamIndOppPotLocation,
+                   h + ":" + pairedAp + ":h", false);
 }
 
-bool UECLDraw::DFSHomeTeamPredicate(int homeTeamIndex, int awayPot,
-                                    const DFSContext &context) const {
-    std::string h = std::to_string(homeTeamIndex);
-    std::string ap = std::to_string(awayPot);
-    std::string pairedAp =
-        std::to_string(awayPot % 2 == 0 ? awayPot - 1 : awayPot + 1);
-    return !get_or(context.hasPlayedWithPotMap, h + ":" + ap + ":h", false) &&
-           !get_or(context.hasPlayedWithPotMap, h + ":" + ap + ":a", false) &&
-           !get_or(context.hasPlayedWithPotMap, h + ":" + pairedAp + ":h",
-                   false);
-}
-
-bool UECLDraw::verifyDrawHomeAway(std::unordered_map<int, DrawVerifier> &m,
+bool UECLDraw::verifyDrawHomeAway(std::unordered_map<int, TeamVerifier> &m,
                                   int homeTeamIndex, int awayTeamIndex) const {
-    // check for 1 home, 1 away match within paired pots (1/2, 3/4, 5/6) for
+    // check for 1 home, 1 away game within paired pots (1/2, 3/4, 5/6) for
     // each team
     int homePot = teams[homeTeamIndex].pot;
     int awayPot = teams[awayTeamIndex].pot;
@@ -163,21 +160,21 @@ bool UECLDraw::verifyDrawHomeAway(std::unordered_map<int, DrawVerifier> &m,
     std::string pairedAp =
         std::to_string(awayPot % 2 == 0 ? awayPot - 1 : awayPot + 1);
 
-    if (m[homeTeamIndex].hasPlayedWithPot[ap + ":h"] ||
-        m[homeTeamIndex].hasPlayedWithPot[pairedAp + ":h"] ||
-        m[awayTeamIndex].hasPlayedWithPot[hp + ":a"] ||
-        m[awayTeamIndex].hasPlayedWithPot[pairedHp + ":a"]) {
+    if (m[homeTeamIndex].isPickedByOppPotLocation[ap + ":h"] ||
+        m[homeTeamIndex].isPickedByOppPotLocation[pairedAp + ":h"] ||
+        m[awayTeamIndex].isPickedByOppPotLocation[hp + ":a"] ||
+        m[awayTeamIndex].isPickedByOppPotLocation[pairedHp + ":a"]) {
         if (!suppress)
             std::cout << "INVALID DRAW: 1 home/1 away per pot pairing violated"
                       << std::endl;
         return false;
     }
-    m[homeTeamIndex].hasPlayedWithPot[ap + ":h"] = true;
-    m[awayTeamIndex].hasPlayedWithPot[hp + ":a"] = true;
+    m[homeTeamIndex].isPickedByOppPotLocation[ap + ":h"] = true;
+    m[awayTeamIndex].isPickedByOppPotLocation[hp + ":a"] = true;
     return true;
 }
 
-bool UECLDraw::DFSWeakCheck(const Game &g, const DFSContext &context) {
+bool UECLDraw::dfsWeakCheck(const Game &g, const DFSContext &context) const {
     // return true if checks passed; false if any check failed
 
     // - each team needing away game against g.h pot or g.h paired pot must have
@@ -191,9 +188,9 @@ bool UECLDraw::DFSWeakCheck(const Game &g, const DFSContext &context) {
             int homeTeamInd = (homePot - 1) * numTeamsPerPot + i;
             int pairedPot = homePot % 2 == 0 ? homePot - 1 : homePot + 1;
             int pairedPotHomeTeamInd = (pairedPot - 1) * numTeamsPerPot + i;
-            if (validRemainingGame(Game(homeTeamInd, teamInd), context) ||
-                validRemainingGame(Game(pairedPotHomeTeamInd, teamInd),
-                                   context)) {
+            if (dfsValidRemainingGame(Game(homeTeamInd, teamInd), context) ||
+                dfsValidRemainingGame(Game(pairedPotHomeTeamInd, teamInd),
+                                      context)) {
                 validMatchup = true;
                 break;
             }
@@ -214,9 +211,9 @@ bool UECLDraw::DFSWeakCheck(const Game &g, const DFSContext &context) {
             int awayTeamInd = (awayPot - 1) * numTeamsPerPot + i;
             int pairedPot = awayPot % 2 == 0 ? awayPot - 1 : awayPot + 1;
             int pairedPotAwayTeamInd = (pairedPot - 1) * numTeamsPerPot + i;
-            if (validRemainingGame(Game(teamInd, awayTeamInd), context) ||
-                validRemainingGame(Game(teamInd, pairedPotAwayTeamInd),
-                                   context)) {
+            if (dfsValidRemainingGame(Game(teamInd, awayTeamInd), context) ||
+                dfsValidRemainingGame(Game(teamInd, pairedPotAwayTeamInd),
+                                      context)) {
                 validMatchup = true;
                 break;
             }
@@ -229,7 +226,7 @@ bool UECLDraw::DFSWeakCheck(const Game &g, const DFSContext &context) {
     return true;
 }
 
-bool UECLDraw::DFSStrongCheck(const Game &g, const DFSContext &context) {
+bool UECLDraw::dfsStrongCheck(const DFSContext &context) const {
     // return true if checks passed; false if any check failed
 
     // - for each country and each pot pairing, country's home games needed
@@ -277,32 +274,32 @@ bool UECLDraw::DFSStrongCheck(const Game &g, const DFSContext &context) {
                 // this pot team can contribute up to maxSlotsTeam to pot pair's
                 // total home or away slots
                 int maxSlotsTeam =
-                    2 - get_or(context.numOpponentCountryByTeam,
+                    2 - get_or(context.numGamesByTeamIndOppCountry,
                                std::to_string(potTeamInd) + ":" + country, 0);
                 int pairedPotMaxSlotsTeam =
-                    2 - get_or(context.numOpponentCountryByTeam,
+                    2 - get_or(context.numGamesByTeamIndOppCountry,
                                std::to_string(pairedPotTeamInd) + ":" + country,
                                0);
 
                 // compute # of home slots and away slots this pot/paired pot
                 // team can provide
                 for (const int &countryTeamInd : countryTeamInds) {
-                    if (validRemainingGame(Game(countryTeamInd, potTeamInd),
-                                           context)) {
+                    if (dfsValidRemainingGame(Game(countryTeamInd, potTeamInd),
+                                              context)) {
                         homeSlotsTeam =
                             std::min(maxSlotsTeam, homeSlotsTeam + 1);
                     }
-                    if (validRemainingGame(Game(potTeamInd, countryTeamInd),
-                                           context)) {
+                    if (dfsValidRemainingGame(Game(potTeamInd, countryTeamInd),
+                                              context)) {
                         awaySlotsTeam =
                             std::min(maxSlotsTeam, awaySlotsTeam + 1);
                     }
-                    if (validRemainingGame(
+                    if (dfsValidRemainingGame(
                             Game(countryTeamInd, pairedPotTeamInd), context)) {
                         pairedPotHomeSlotsTeam = std::min(
                             pairedPotMaxSlotsTeam, pairedPotHomeSlotsTeam + 1);
                     }
-                    if (validRemainingGame(
+                    if (dfsValidRemainingGame(
                             Game(pairedPotTeamInd, countryTeamInd), context)) {
                         pairedPotAwaySlotsTeam = std::min(
                             pairedPotMaxSlotsTeam, pairedPotAwaySlotsTeam + 1);

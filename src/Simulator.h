@@ -11,8 +11,8 @@
 
 class Simulator {
   public:
-    Simulator(int year, std::string competition, std::string input = "");
-    void run(int iterations, std::string output = "");
+    Simulator(int year, std::string competition, std::string teamsPath = "");
+    void run(int iterations, std::string output = "") const;
 
   private:
     void writeResults(const std::unordered_map<std::string, int> &counts,

@@ -11,9 +11,9 @@
 #include <unordered_map>
 #include <vector>
 
-std::vector<Team> readCSVTeams(std::string input_file) {
+std::vector<Team> readCSVTeams(std::string path) {
     std::vector<Team> teams;
-    std::ifstream file(input_file);
+    std::ifstream file(path);
     std::string line;
     std::getline(file, line);
     while (std::getline(file, line)) {
@@ -31,7 +31,7 @@ std::vector<Team> readCSVTeams(std::string input_file) {
     return teams;
 }
 
-std::vector<Game> readTXTGames(std::string input_file,
+std::vector<Game> readTXTGames(std::string path,
                                const std::vector<Team> &teams) {
     std::unordered_map<std::string, int> teamIndexByAbbrev;
     for (size_t i = 0; i < teams.size(); i++) {
@@ -39,7 +39,7 @@ std::vector<Game> readTXTGames(std::string input_file,
     }
 
     std::vector<Game> games;
-    std::ifstream file(input_file);
+    std::ifstream file(path);
     std::string line;
     while (std::getline(file, line)) {
         if (trim(line).empty()) {

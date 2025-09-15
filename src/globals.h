@@ -18,11 +18,6 @@
 
 extern const std::string POT_COLORS[];
 
-const int NUM_POTS = 4;
-const int NUM_TEAMS_PER_POT = 9;
-const int NUM_MATCHES_PER_TEAM = 8;
-const int NUM_TEAMS = NUM_POTS * NUM_TEAMS_PER_POT;
-
 struct Team {
     int pot; // 1-based
     std::string abbrev;
@@ -44,27 +39,30 @@ struct Game {
     }
 };
 
-struct DrawVerifier {
-    std::unordered_set<int> opponents;
-    std::unordered_map<std::string, int> opponentCountryCount;
+// used to verify each team after draw
+struct TeamVerifier {
+    std::unordered_set<int> oppTeamInds;
+    std::unordered_map<std::string, int> numOppsByCountry;
     std::unordered_map<std::string, bool>
-        hasPlayedWithPot; // {opponent_pot}:{h/a}
-    std::unordered_map<int, int> numMatchesPerPot;
+        isPickedByOppPotLocation; // {opp pot}:{h/a}
+    std::unordered_map<int, int> numGamesByPot;
 };
 
 // current draw state, used in DFS
 struct DFSContext {
-    std::vector<Game> pickedMatches;
+    std::vector<Game> pickedGames;
     std::unordered_map<std::string, int>
-        numGamesByPotPair; // {home pot}:{away pot} -> # games
-    std::unordered_map<int, int> numHomeGamesByTeam; // team ind -> # home games
-    std::unordered_map<int, int> numAwayGamesByTeam; // team ind -> # away games
+        numGamesByPotPair; // {home pot}:{away pot} -> # picked games
+    std::unordered_map<int, int>
+        numHomeGamesByTeamInd; // team ind -> # picked home games
+    std::unordered_map<int, int>
+        numAwayGamesByTeamInd; // team ind -> # picked away games
     std::unordered_map<std::string, int>
-        numOpponentCountryByTeam; // {team ind}:{opp country} -> count
+        numGamesByTeamIndOppCountry; // {team ind}:{opp country} -> count
     std::unordered_map<std::string, bool>
-        hasPlayedWithPotMap; // {team ind}:{opp pot}:{h/a dep. on team ind}
+        isPickedByTeamIndOppPotLocation; // {team ind}:{opp pot}:{h/a}
     std::unordered_set<std::string>
-        pickedMatchesTeamIndices; // {home team ind}:{away team ind}
+        pickedGamesTeamInds; // {home team ind}:{away team ind} per picked game
     std::vector<std::unordered_set<int>>
         needsHomeAgainstPot; // pot ind (0-based) -> set of team inds
                              // with unscheduled home games against

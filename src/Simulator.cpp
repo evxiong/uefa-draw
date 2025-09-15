@@ -12,18 +12,15 @@
 #include <string>
 #include <thread>
 
-Simulator::Simulator(int y, std::string c, std::string input)
+Simulator::Simulator(int y, std::string c, std::string teamsPath)
     : year(y), competition(c) {
-    std::string input_file =
-        (input == "")
-            ? "data/" + std::to_string(year) + "/teams/" + competition + ".csv"
-            : input;
-
-    // read input file csv to get teams
-    teams = readCSVTeams(input_file);
+    teams =
+        readCSVTeams((teamsPath == "") ? "data/" + std::to_string(year) +
+                                             "/teams/" + competition + ".csv"
+                                       : teamsPath);
 }
 
-void Simulator::run(int iterations, std::string output) {
+void Simulator::run(int iterations, std::string output) const {
     std::unordered_map<std::string, int> counts; // {homeInd}:{awayInd} -> count
 
     // compute results output path
@@ -79,16 +76,16 @@ void Simulator::run(int iterations, std::string output) {
             auto t0 = std::chrono::steady_clock::now();
             bool success = false;
             std::unique_ptr<Draw> d;
-            std::vector<Game> initialMatchState;
+            std::vector<Game> initialGames;
             bool hasFailed = false;
 
             while (!success) {
                 if (competition == "ucl")
-                    d.reset(new UCLDraw(teams, initialMatchState));
+                    d.reset(new UCLDraw(teams, initialGames));
                 else if (competition == "uel")
-                    d.reset(new UELDraw(teams, initialMatchState));
+                    d.reset(new UELDraw(teams, initialGames));
                 else if (competition == "uecl")
-                    d.reset(new UECLDraw(teams, initialMatchState));
+                    d.reset(new UECLDraw(teams, initialGames));
                 else {
                     std::cout << "Invalid competition specified" << std::endl;
                     exit(1);
@@ -96,9 +93,9 @@ void Simulator::run(int iterations, std::string output) {
                 d->draw(dfsPool);
                 success = d->verifyDraw();
                 if (!success) {
-                    // if failed, replace initial match state with current match
+                    // if failed, replace initial games with current picked game
                     // state prior to failure
-                    initialMatchState = d->getPickedMatches();
+                    initialGames = d->getPickedGames();
                     hasFailed = true;
                 }
             }
@@ -110,8 +107,8 @@ void Simulator::run(int iterations, std::string output) {
 
             // update thread counts
             std::thread::id threadId = std::this_thread::get_id();
-            std::vector<Game> pickedMatches = d->getPickedMatches();
-            for (const Game &g : pickedMatches) {
+            std::vector<Game> pickedGames = d->getPickedGames();
+            for (const Game &g : pickedGames) {
                 threadCounts[indexByThreadId.at(threadId)]
                             [std::to_string(g.h) + ":" + std::to_string(g.a)] +=
                     1;
@@ -203,8 +200,8 @@ void Simulator::writeResults(const std::unordered_map<std::string, int> &counts,
     out << "---\n";
     // write results
     out << "t1,t2,home,away,total\n";
-    for (int i = 0; i < NUM_TEAMS - 1; i++) {
-        for (int j = i + 1; j < NUM_TEAMS; j++) {
+    for (size_t i = 0; i < teams.size() - 1; i++) {
+        for (size_t j = i + 1; j < teams.size(); j++) {
             std::string homeAwayKey =
                 std::to_string(i) + ":" + std::to_string(j);
             std::string awayHomeKey =

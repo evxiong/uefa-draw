@@ -7,7 +7,7 @@
 
 // usage:
 // $ make all
-// $ ./bin/main <year> <ucl | uel | uecl> <iterations> [<input csv path>
+// $ ./bin/main <year> <ucl | uel | uecl> <iterations> [<teams csv path>
 //   <output csv path>]
 
 int main(int argc, char **argv) {
@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
     }
 
     int iterations = 1;
-    std::string input = "";
+    std::string teamsPath = "";
     std::string output = "";
     int year = std::stoi(argv[1]);
     std::string competition = argv[2];
@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
         iterations = std::stoi(argv[3]);
     }
     if (argc >= 5) {
-        input = argv[4];
+        teamsPath = argv[4];
     }
     if (argc >= 6) {
         output = argv[5];
@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    Simulator s(year, competition, input);
+    Simulator s(year, competition, teamsPath);
     s.run(iterations, output);
     return 0;
 }
