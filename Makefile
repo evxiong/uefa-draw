@@ -19,7 +19,7 @@ BIN_DIR := bin
 LIB_SRCS := $(wildcard $(SRC_DIR)/*.cpp)
 LIB_OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(LIB_SRCS))
 
-# Default driver (override: make DRIVER=test_main)
+# Default driver (override: make DRIVER=<driver_name>)
 DRIVER ?= main
 DRIVER_SRC := $(DRIVER_DIR)/$(DRIVER).cpp
 DRIVER_OBJ := $(BUILD_DIR)/$(DRIVER).o

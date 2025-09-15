@@ -3,6 +3,7 @@
 
 #include "Draw.h"
 #include "globals.h"
+#include <chrono>
 #include <filesystem>
 #include <string>
 #include <unordered_map>
@@ -10,21 +11,18 @@
 
 class Simulator {
   public:
-    Simulator(int year, std::string competition, std::string input,
-              std::string output);
-    void run(int iterations);
+    Simulator(int year, std::string competition, std::string teamsPath = "");
+    void run(int iterations, std::string output = "") const;
 
   private:
-    void writeResults() const;
-    void updateCounts(const std::vector<Game> &s);
+    void writeResults(const std::unordered_map<std::string, int> &counts,
+                      const std::filesystem::path &outputPath,
+                      const std::chrono::system_clock::time_point &tp,
+                      int iterations) const;
 
-    int failures;
     int year;
     std::string competition; // 'ucl', 'uel', or 'uecl'
-    std::string input_file;
-    std::filesystem::path output_path;
     std::vector<Team> teams;
-    std::unordered_map<std::string, int> counts; // {homeInd}:{awayInd} -> count
 };
 
 #endif // SIMULATOR_H

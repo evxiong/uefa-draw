@@ -5,20 +5,27 @@
 #include "globals.h"
 #include "utils.h"
 #include <iostream>
+#include <memory>
+#include <string>
 #include <vector>
 
 // usage:
 // $ make DRIVER=debug
-// $ ./bin/debug <year> <ucl | uel | uecl>
+// $ ./bin/debug <year> <ucl | uel | uecl> <initial games txt path>
 
 int main(int argc, char **argv) {
-    if (argc != 3) {
+    if (argc < 3) {
         std::cerr << "Usage: ./bin/debug <year> <competition>" << std::endl;
         exit(1);
     }
 
+    std::string initialGamesPath = "";
     const int year = std::stoi(argv[1]);
     const std::string competition = argv[2];
+
+    if (argc >= 4) {
+        initialGamesPath = argv[3];
+    }
 
     if (year <= 0) {
         std::cerr << "Invalid year: must be > 0" << std::endl;
@@ -31,25 +38,25 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    const std::string input_file =
+    const std::string teamsPath =
         "data/" + std::to_string(year) + "/teams/" + competition + ".csv";
 
-    Draw *d;
+    std::unique_ptr<Draw> d;
     if (competition == "ucl")
-        d = new UCLDraw(input_file);
+        d.reset(new UCLDraw(teamsPath, initialGamesPath, false));
     else if (competition == "uel")
-        d = new UELDraw(input_file);
+        d.reset(new UELDraw(teamsPath, initialGamesPath, false));
     else if (competition == "uecl")
-        d = new UECLDraw(input_file);
+        d.reset(new UECLDraw(teamsPath, initialGamesPath, false));
     else {
         std::cerr << "Invalid competition type: must be 'ucl', 'uel', or 'uecl'"
                   << std::endl;
         exit(1);
     }
 
-    bool valid = d->draw(false);
+    bool valid = d->draw();
     if (valid) {
         d->displayPots();
-        d->verifyDraw(false);
+        d->verifyDraw();
     }
 }
