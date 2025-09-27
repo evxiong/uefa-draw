@@ -11,19 +11,9 @@ Results will be placed in `data/<year>/<competition>/teams.csv` and
 import argparse
 import csv
 import os
-from enum import Enum
 
 import requests
-
-HEADERS = {
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
-}
-
-
-class Competition(Enum):
-    UCL = "ucl"
-    UEL = "uel"
-    UECL = "uecl"
+from shared import HEADERS, Competition
 
 
 def get_params_and_key(competition: Competition, year: int) -> tuple[dict, str]:
