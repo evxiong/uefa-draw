@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
     }
 
     const std::string teamsPath =
-        "data/" + std::to_string(year) + "/teams/" + competition + ".csv";
+        "data/" + std::to_string(year) + "/" + competition + "/teams.csv";
 
     std::unique_ptr<Draw> d;
     if (competition == "ucl")

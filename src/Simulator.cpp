@@ -15,8 +15,8 @@
 Simulator::Simulator(int y, std::string c, std::string teamsPath)
     : year(y), competition(c) {
     teams =
-        readCSVTeams((teamsPath == "") ? "data/" + std::to_string(year) +
-                                             "/teams/" + competition + ".csv"
+        readCSVTeams((teamsPath == "") ? "data/" + std::to_string(year) + "/" +
+                                             competition + "/teams.csv"
                                        : teamsPath);
 }
 

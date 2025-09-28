@@ -5,7 +5,7 @@ Usage:
 $ python analysis.py <path to results csv>
 
 Visualization will be placed in
-`<competition>_<year>_<iterations>_<YYYYMMDD>_<HHMMSS>.png`.
+`results/<competition>_<year>_<iterations>_<YYYYMMDD>_<HHMMSS>.png`.
 """
 
 import argparse

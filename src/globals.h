@@ -23,11 +23,8 @@ struct Team {
     std::string abbrev;
     std::string country;
     std::string name;
-    float coefficient = 0;
     Team(int p, std::string a, std::string c, std::string n)
         : pot(p), abbrev(a), country(c), name(n) {}
-    Team(int p, std::string a, std::string c, std::string n, float coeff)
-        : pot(p), abbrev(a), country(c), name(n), coefficient(coeff) {}
 };
 
 struct Game {
