@@ -144,6 +144,7 @@ def render_heatmap(
     data: np.ndarray,
     row_labels: list[str],
     col_labels: list[str],
+    num_teams_per_pot: int,
     ax: Axes,
     colorbar_label: str,
     val_fmt: str = "{:.1f}",
@@ -156,6 +157,8 @@ def render_heatmap(
         data (np.ndarray): 2D numpy array
         row_labels (list[str]): string labels for rows
         col_labels (list[str]): string labels for columns
+        num_teams_per_pot (int): number of teams per pot, used to draw major
+            grid lines
         ax (Axes): `Axes` to which heatmap is plotted
         colorbar_label (str, optional): colorbar label
         val_fmt (str): format for data values. Defaults to "{:.1f}".
@@ -184,12 +187,12 @@ def render_heatmap(
     ax.grid(which="minor", color="0.5", linestyle="-", linewidth=0.5)
     ax.tick_params(which="minor", bottom=False, left=False)
 
-    third_breaks = [2.5, 5.5, 11.5, 14.5, 20.5, 23.5, 29.5, 32.5]
+    third_breaks = [b - 0.5 for b in range(3, 36, 3)]
     for p in third_breaks:
         ax.axvline(x=p, color="#444444", linewidth=0.75)
         ax.axhline(y=p, color="#444444", linewidth=0.75)
 
-    pot_breaks = [8.5, 17.5, 26.5]
+    pot_breaks = [b - 0.5 for b in range(num_teams_per_pot, 36, num_teams_per_pot)]
     for p in pot_breaks:
         ax.axvline(x=p, color="black", linewidth=1)
         ax.axhline(y=p, color="black", linewidth=1)
@@ -318,6 +321,7 @@ def main():
         data=probs,
         row_labels=team_abbrevs,
         col_labels=team_abbrevs,
+        num_teams_per_pot=6 if competition == Competition.UECL else 9,
         ax=ax,
         colorbar_label="Matchup Probability (%)",
         cmap=create_colormap(competition, COLORS[competition]),

@@ -4,8 +4,8 @@ Scrape teams and draw results from UEFA website.
 Usage:
 $ python scrape.py <year> <competition>
 
-Results will be placed in `data/<year>/<competition>/teams.csv` and
-`data/<year>/<competition>/draw.txt`.
+Teams will be placed in `data/<year>/<competition>/teams.csv` and draw results
+in `data/<year>/<competition>/draw.txt`.
 """
 
 import argparse
@@ -17,6 +17,15 @@ from shared import HEADERS, Competition
 
 
 def get_params_and_key(competition: Competition, year: int) -> tuple[dict, str]:
+    """Get UEFA request params and object key.
+
+    Args:
+        competition (Competition): current competition
+        year (int): earlier year of season (ex. 2025 for 2025/26 season)
+
+    Returns:
+        tuple[dict, str]: (request params, object key)
+    """
     title_resource_key = (
         "draw_title_UCL_LP"
         if competition == Competition.UCL
