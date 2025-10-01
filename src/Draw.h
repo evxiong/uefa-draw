@@ -8,6 +8,8 @@
 #include <exception>
 #include <random>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class Draw {
@@ -20,12 +22,15 @@ class Draw {
 
   protected:
     Draw(const std::vector<Team> &t, const std::vector<Game> &initialGames,
-         int pots, int teamsPerPot, int gamesPerTeam, int gamesPerPotPair,
-         bool suppress);
-    Draw(std::string teamsPath, std::string initialGamesPath, int pots,
+         const std::unordered_set<std::string> &bannedCountryMatchups, int pots,
          int teamsPerPot, int gamesPerTeam, int gamesPerPotPair, bool suppress);
+    Draw(std::string teamsPath, std::string initialGamesPath,
+         std::string bannedCountryMatchupsPath, int pots, int teamsPerPot,
+         int gamesPerTeam, int gamesPerPotPair, bool suppress);
 
-    void initializeState(const std::vector<Game> &initialGames);
+    void initializeState(
+        const std::vector<Game> &initialGames,
+        const std::unordered_set<std::string> &bannedCountryMatchups);
     int pickTeamIndex(int pot);
     Game pickGame() const;                            // used in debug
     Game pickGame(BS::light_thread_pool &pool) const; // used in simulations
@@ -106,32 +111,40 @@ class Draw {
 
 class UCLDraw : public Draw {
   public:
-    UCLDraw(std::string teamsPath, std::string initialGamesPath,
-            bool suppress = true)
-        : Draw(teamsPath, initialGamesPath, 4, 9, 8, 9, suppress) {}
+    UCLDraw(std::string teamsPath, std::string initialGamesPath = "",
+            std::string bannedCountryMatchupsPath = "", bool suppress = true)
+        : Draw(teamsPath, initialGamesPath, bannedCountryMatchupsPath, 4, 9, 8,
+               9, suppress) {}
     UCLDraw(const std::vector<Team> &t,
-            const std::vector<Game> &m = std::vector<Game>(),
+            const std::vector<Game> &g = std::vector<Game>(),
+            const std::unordered_set<std::string> &bc =
+                std::unordered_set<std::string>(),
             bool suppress = true)
-        : Draw(t, m, 4, 9, 8, 9, suppress) {}
+        : Draw(t, g, bc, 4, 9, 8, 9, suppress) {}
 };
 
 class UELDraw : public Draw {
   public:
-    UELDraw(std::string teamsPath, std::string initialGamesPath,
-            bool suppress = true)
-        : Draw(teamsPath, initialGamesPath, 4, 9, 8, 9, suppress) {}
+    UELDraw(std::string teamsPath, std::string initialGamesPath = "",
+            std::string bannedCountryMatchupsPath = "", bool suppress = true)
+        : Draw(teamsPath, initialGamesPath, bannedCountryMatchupsPath, 4, 9, 8,
+               9, suppress) {}
     UELDraw(const std::vector<Team> &t,
-            const std::vector<Game> &m = std::vector<Game>(),
+            const std::vector<Game> &g = std::vector<Game>(),
+            const std::unordered_set<std::string> &bc =
+                std::unordered_set<std::string>(),
             bool suppress = true)
-        : Draw(t, m, 4, 9, 8, 9, suppress) {}
+        : Draw(t, g, bc, 4, 9, 8, 9, suppress) {}
 };
 
 class UECLDraw : public Draw {
   public:
-    UECLDraw(std::string teamsPath, std::string initialGamesPath,
-             bool suppress = true);
+    UECLDraw(std::string teamsPath, std::string initialGamesPath = "",
+             std::string bannedCountryMatchupsPath = "", bool suppress = true);
     UECLDraw(const std::vector<Team> &t,
-             const std::vector<Game> &m = std::vector<Game>(),
+             const std::vector<Game> &g = std::vector<Game>(),
+             const std::unordered_set<std::string> &bc =
+                 std::unordered_set<std::string>(),
              bool suppress = true);
 
   protected:

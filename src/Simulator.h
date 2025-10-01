@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class Simulator {
@@ -23,6 +24,7 @@ class Simulator {
     int year;
     std::string competition; // 'ucl', 'uel', or 'uecl'
     std::vector<Team> teams;
+    std::unordered_set<std::string> bannedCountryMatchups;
 };
 
 #endif // SIMULATOR_H

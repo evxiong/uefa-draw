@@ -8,12 +8,13 @@
 #include <vector>
 
 UECLDraw::UECLDraw(std::string teamsPath, std::string initialGamesPath,
-                   bool suppress)
-    : Draw(teamsPath, initialGamesPath, 6, 6, 6, 3, suppress) {}
+                   std::string bannedCountryMatchupsPath, bool suppress)
+    : Draw(teamsPath, initialGamesPath, bannedCountryMatchupsPath, 6, 6, 6, 3,
+           suppress) {}
 
-UECLDraw::UECLDraw(const std::vector<Team> &t, const std::vector<Game> &m,
-                   bool suppress)
-    : Draw(t, m, 6, 6, 6, 3, suppress) {}
+UECLDraw::UECLDraw(const std::vector<Team> &t, const std::vector<Game> &g,
+                   const std::unordered_set<std::string> &bc, bool suppress)
+    : Draw(t, g, bc, 6, 6, 6, 3, suppress) {}
 
 bool UECLDraw::validRemainingGame(const Game &g) const {
     if (!Draw::validRemainingGame(g)) {

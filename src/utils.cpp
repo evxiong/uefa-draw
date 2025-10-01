@@ -9,6 +9,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 std::vector<Team> readCSVTeams(std::string path) {
@@ -52,6 +53,22 @@ std::vector<Game> readTXTGames(std::string path,
                            teamIndexByAbbrev.at(away));
     }
     return games;
+}
+
+std::unordered_set<std::string> readTXTCountries(std::string path) {
+    std::unordered_set<std::string> countryMatchups;
+    std::ifstream file(path);
+    std::string line;
+    while (std::getline(file, line)) {
+        if (trim(line).empty()) {
+            continue;
+        }
+        size_t pos = line.find('-');
+        std::string country1 = trim(line.substr(0, pos));
+        std::string country2 = trim(line.substr(pos + 1));
+        countryMatchups.insert(country1 + ":" + country2);
+    }
+    return countryMatchups;
 }
 
 std::string trim(const std::string &s) {

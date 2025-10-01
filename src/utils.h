@@ -5,11 +5,13 @@
 #include <chrono>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 std::vector<Team> readCSVTeams(std::string path);
 std::vector<Game> readTXTGames(std::string path,
                                const std::vector<Team> &teams);
+std::unordered_set<std::string> readTXTCountries(std::string path);
 std::string trim(const std::string &s);
 std::string toLower(const std::string &s);
 std::string

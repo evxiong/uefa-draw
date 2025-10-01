@@ -18,6 +18,8 @@ Simulator::Simulator(int y, std::string c, std::string teamsPath)
         readCSVTeams((teamsPath == "") ? "data/" + std::to_string(year) + "/" +
                                              competition + "/teams.csv"
                                        : teamsPath);
+    bannedCountryMatchups =
+        readTXTCountries("data/" + std::to_string(year) + "/banned.txt");
 }
 
 void Simulator::run(int iterations, std::string output) const {
@@ -81,11 +83,14 @@ void Simulator::run(int iterations, std::string output) const {
 
             while (!success) {
                 if (competition == "ucl")
-                    d.reset(new UCLDraw(teams, initialGames));
+                    d.reset(new UCLDraw(teams, initialGames,
+                                        bannedCountryMatchups));
                 else if (competition == "uel")
-                    d.reset(new UELDraw(teams, initialGames));
+                    d.reset(new UELDraw(teams, initialGames,
+                                        bannedCountryMatchups));
                 else if (competition == "uecl")
-                    d.reset(new UECLDraw(teams, initialGames));
+                    d.reset(new UECLDraw(teams, initialGames,
+                                         bannedCountryMatchups));
                 else {
                     std::cout << "Invalid competition specified" << std::endl;
                     exit(1);

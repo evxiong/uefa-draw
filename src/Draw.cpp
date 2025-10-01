@@ -16,26 +16,33 @@
 const std::string POT_COLORS[] = {RED, BLUE, GREEN, YELLOW, CYAN, MAGENTA};
 
 Draw::Draw(const std::vector<Team> &t, const std::vector<Game> &initialGames,
+           const std::unordered_set<std::string> &bannedCountryMatchups,
            int pots, int teamsPerPot, int gamesPerTeam, int gamesPerPotPair,
            bool s)
     : numPots(pots), numTeamsPerPot(teamsPerPot), numGamesPerTeam(gamesPerTeam),
       numTeams(numPots * numTeamsPerPot), numGamesPerPotPair(gamesPerPotPair),
       suppress(s), teams(t), randomEngine(std::random_device{}()) {
-    initializeState(initialGames);
+    initializeState(initialGames, bannedCountryMatchups);
 }
 
-Draw::Draw(std::string teamsPath, std::string initialGamesPath, int pots,
-           int teamsPerPot, int gamesPerTeam, int gamesPerPotPair, bool s)
+Draw::Draw(std::string teamsPath, std::string initialGamesPath,
+           std::string bannedCountryMatchupsPath, int pots, int teamsPerPot,
+           int gamesPerTeam, int gamesPerPotPair, bool s)
     : numPots(pots), numTeamsPerPot(teamsPerPot), numGamesPerTeam(gamesPerTeam),
       numTeams(numPots * numTeamsPerPot), numGamesPerPotPair(gamesPerPotPair),
       suppress(s), teams(readCSVTeams(teamsPath)),
       randomEngine(std::random_device{}()) {
     initializeState(initialGamesPath != ""
                         ? readTXTGames(initialGamesPath, teams)
-                        : std::vector<Game>());
+                        : std::vector<Game>(),
+                    bannedCountryMatchupsPath != ""
+                        ? readTXTCountries(bannedCountryMatchupsPath)
+                        : std::unordered_set<std::string>());
 }
 
-void Draw::initializeState(const std::vector<Game> &initialGames) {
+void Draw::initializeState(
+    const std::vector<Game> &initialGames,
+    const std::unordered_set<std::string> &bannedCountryMatchups) {
     for (size_t i = 0; i < teams.size(); i++) {
         numTeamsByCountry[teams[i].country] += 1;
         teamIndsByCountry[teams[i].country].push_back(i);
@@ -53,14 +60,20 @@ void Draw::initializeState(const std::vector<Game> &initialGames) {
         }
     }
     // create all possible matchups (home vs away status matters)
-    // games must be contested btwn two teams of diff countries
+    // games must be contested btwn two teams of diff countries, and countries
+    // cannot be banned from playing each other
     // max of numTeams * numGamesPerTeam
     for (int i = 0; i < numTeams - 1; i++) {
         for (int j = i + 1; j < numTeams; j++) {
-            if (teams[i].country != teams[j].country) {
-                allGames.push_back(Game(i, j));
-                allGames.push_back(Game(j, i));
+            if (teams[i].country == teams[j].country ||
+                bannedCountryMatchups.count(teams[i].country + ":" +
+                                            teams[j].country) ||
+                bannedCountryMatchups.count(teams[j].country + ":" +
+                                            teams[i].country)) {
+                continue;
             }
+            allGames.push_back(Game(i, j));
+            allGames.push_back(Game(j, i));
         }
     }
     // initialize draw state with initial games

@@ -41,13 +41,19 @@ int main(int argc, char **argv) {
     const std::string teamsPath =
         "data/" + std::to_string(year) + "/" + competition + "/teams.csv";
 
+    const std::string bannedCountryMatchupsPath =
+        "data/" + std::to_string(year) + "/banned.txt";
+
     std::unique_ptr<Draw> d;
     if (competition == "ucl")
-        d.reset(new UCLDraw(teamsPath, initialGamesPath, false));
+        d.reset(new UCLDraw(teamsPath, initialGamesPath,
+                            bannedCountryMatchupsPath, false));
     else if (competition == "uel")
-        d.reset(new UELDraw(teamsPath, initialGamesPath, false));
+        d.reset(new UELDraw(teamsPath, initialGamesPath,
+                            bannedCountryMatchupsPath, false));
     else if (competition == "uecl")
-        d.reset(new UECLDraw(teamsPath, initialGamesPath, false));
+        d.reset(new UECLDraw(teamsPath, initialGamesPath,
+                             bannedCountryMatchupsPath, false));
     else {
         std::cerr << "Invalid competition type: must be 'ucl', 'uel', or 'uecl'"
                   << std::endl;
