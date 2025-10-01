@@ -1,8 +1,10 @@
 # uefa-draw
 
-A 2024/25+ UEFA Champions League, Europa League, and Conference League draw
-simulator, multithreaded and written in C++. Data analysis and visualization in
-Python.
+2024/25+ UEFA Champions League, Europa League, and Conference League draw
+simulator, designed for estimating league phase matchup probabilities.
+Multithreaded and written in C++, with data visualization in Python.
+
+<img width="1768" height="623" alt="uefa-draw" src="https://github.com/user-attachments/assets/9e298645-c73b-41fc-a318-c94ee1037d8f" />
 
 ## Overview
 
@@ -25,17 +27,18 @@ TypeScript implementation of a single draw, designed for the web.
 
 ## In this repo
 
-- `src/` - C++ source code
-- `drivers/` - C++ driver code
-  - `main.cpp`: simulation driver (runs many simulations in parallel with output
-    suppressed)
-  - `debug.cpp`: debug driver (runs single simulation with full output
-    displayed)
-- `include/` - third-party C++ libraries
-- `licenses/` - licenses for the third-party C++ libraries
-- `data/` - teams and actual draw results per competition, per year
-- `examples/` - example simulation results and visualizations from past seasons
-- `scripts/` - Python scripts for populating `data/` and generating
+- [`src/`](src) - C++ source code
+- [`drivers/`](drivers) - C++ driver code
+  - [`main.cpp`](drivers/main.cpp): simulation driver (runs many simulations in
+    parallel with output suppressed)
+  - [`debug.cpp`](drivers/debug.cpp): debug driver (runs single simulation with
+    full output displayed)
+- [`include/`](include) - third-party C++ libraries
+- [`licenses/`](licenses) - licenses for the third-party C++ libraries
+- [`data/`](data) - teams and actual draw results per competition, per year
+- [`examples/`](examples) - example simulation results and visualizations from
+  past seasons
+- [`scripts/`](scripts) - Python scripts for populating `data/` and generating
   visualizations
 
 ## Getting started
@@ -122,11 +125,11 @@ $ python analysis.py <path to results csv>
 This program runs many simulations to estimate each matchup's probability. For a
 95% confidence interval with a sample size of $n=25000$, the maximum margin of
 error (assuming maximum variance) on any estimated matchup probability is
-$\plusmn 0.0062$, or $\plusmn 0.62\%$. Since $p$ will almost never be $0.5$ in
-this case, the margin of error will almost always be smaller than this value.
-For example, if a particular matchup occurs in the sampled simulations 25% of
-the time, then we are 95% confident that the interval $25 \plusmn 0.54\%$
-contains the true matchup probability.
+$\pm 0.0062$, or $\pm 0.62 \\% $. Since $p$ will almost never be $0.5$ in this
+case, the margin of error will almost always be smaller than this value. For
+example, if a particular matchup occurs in the sampled simulations 25% of the
+time, then we are 95% confident that the interval $25 \pm 0.54 \\%$ contains the
+true matchup probability.
 
 ### Single simulation
 
@@ -147,3 +150,4 @@ $ ./bin/debug <year> <competition> [<initial picked matches txt path>]
 ### Cleanup
 
 `make clean` removes `bin` and `build` directories.
+
