@@ -29,7 +29,7 @@ CACHE_DIR = ".cache/logos"
 
 
 COLORS = {
-    Competition.UCL: "#00004b",
+    Competition.UCL: "#041181",
     Competition.UEL: "#993f00",
     Competition.UECL: "#005809",
 }
@@ -148,7 +148,6 @@ def render_heatmap(
     ax: Axes,
     colorbar_label: str,
     val_fmt: str = "{:.1f}",
-    threshold: float = 25,
     **kwargs,
 ):
     """Create heatmap.
@@ -162,8 +161,6 @@ def render_heatmap(
         ax (Axes): `Axes` to which heatmap is plotted
         colorbar_label (str, optional): colorbar label
         val_fmt (str): format for data values. Defaults to "{:.1f}".
-        threshold (float): values above threshold will be displayed in
-            white; otherwise, black. Defaults to 25.
         **kwargs: arguments forwarded to `imshow`
     """
     # Plot the heatmap
@@ -196,6 +193,10 @@ def render_heatmap(
     for p in pot_breaks:
         ax.axvline(x=p, color="black", linewidth=1)
         ax.axhline(y=p, color="black", linewidth=1)
+
+    # Set threshold (values above threshold in white, under in black)
+    data_no_zeros = np.where(data == 0, np.nan, data)
+    threshold = np.nanmean(data_no_zeros)
 
     # Label each cell with value
     for i in range(data.shape[0]):
